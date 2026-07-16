@@ -9,6 +9,7 @@ from models import (
     LogCreate, LogUpdate, LogResponse,
 )
 
+# Force fresh deploy
 app = FastAPI(title="Compound API")
 
 app.add_middleware(
