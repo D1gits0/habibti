@@ -2,7 +2,9 @@ import sqlite3
 import os
 from contextlib import contextmanager
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "compound.db")
+# Use /data volume on Railway (persistent), fallback to local dir for dev
+DATA_DIR = "/data" if os.path.isdir("/data") else os.path.dirname(__file__)
+DB_PATH = os.path.join(DATA_DIR, "compound.db")
 
 
 def get_connection():
