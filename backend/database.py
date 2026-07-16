@@ -4,6 +4,7 @@ from contextlib import contextmanager
 
 # Use /data volume on Railway (persistent), fallback to local dir for dev
 DATA_DIR = "/data" if os.path.isdir("/data") else os.path.dirname(__file__)
+print(f"[DEBUG] Using DATA_DIR: {DATA_DIR}, /data exists: {os.path.isdir('/data')}")
 DB_PATH = os.path.join(DATA_DIR, "compound.db")
 
 
