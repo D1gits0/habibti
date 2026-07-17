@@ -3,16 +3,6 @@ import { getLogs } from '../api'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 const HABIT_CATEGORIES = ['sleep', 'hydration', 'habit']
-const CATEGORY_COLORS = {
-  sleep: '#3b82f6',
-  hydration: '#06b6d4',
-  habit: '#22c55e',
-}
-const CATEGORY_GLOW = {
-  sleep: 'panel-glow-blue',
-  hydration: 'panel-glow-blue',
-  habit: 'panel-glow-green',
-}
 
 export default function HabitView() {
   const [logs, setLogs] = useState([])
@@ -53,18 +43,18 @@ export default function HabitView() {
   if (loading) {
     return (
       <div className="md:mt-12">
-        <h1 className="font-pixel text-habit-green text-xs md:text-sm mb-4">🌿 HABITS</h1>
-        <p className="text-gray-500 text-sm">Loading...</p>
+        <h1 className="font-body text-text-primary text-xs md:text-sm mb-4">HABITS</h1>
+        <p className="text-text-secondary text-sm">Loading...</p>
       </div>
     )
   }
 
   return (
     <div className="md:mt-12">
-      <h1 className="font-pixel text-habit-green text-xs md:text-sm mb-4">🌿 HABITS — LAST 30 DAYS</h1>
+      <h1 className="font-body text-text-primary text-xs md:text-sm mb-4">HABITS — LAST 30 DAYS</h1>
 
       {Object.keys(grouped).length === 0 ? (
-        <div className="panel p-6 text-center text-gray-500 text-sm">
+        <div className="panel p-6 text-center text-text-secondary text-sm">
           No habit data in the last 30 days. Start logging!
         </div>
       ) : (
@@ -75,19 +65,17 @@ export default function HabitView() {
               value: e.value,
             }))
             const { total, pct } = getXpInfo(entries)
-            const color = CATEGORY_COLORS[category] || '#22c55e'
-            const glow = CATEGORY_GLOW[category] || ''
 
             return (
-              <div key={`${category}-${metric}`} className={`panel ${glow} p-4`}>
+              <div key={`${category}-${metric}`} className="panel p-4">
                 <div className="flex items-center justify-between mb-2">
                   <div>
-                    <span className="font-pixel text-[8px] text-gray-300 uppercase">
+                    <span className="font-body text-[10px] text-text-primary uppercase">
                       {metric.replace(/_/g, ' ')}
                     </span>
-                    <span className="text-[10px] text-gray-500 ml-2">{category}</span>
+                    <span className="text-[10px] text-text-muted ml-2">{category}</span>
                   </div>
-                  <span className="font-pixel text-[8px] text-gray-400">
+                  <span className="font-body text-[10px] text-text-secondary">
                     LVL {Math.floor(total / 5)}
                   </span>
                 </div>
@@ -96,10 +84,10 @@ export default function HabitView() {
                 <div className="xp-bar mb-3">
                   <div
                     className="xp-bar-fill"
-                    style={{ width: `${pct}%`, backgroundColor: color }}
+                    style={{ width: `${pct}%`, backgroundColor: '#FF4F00' }}
                   />
                 </div>
-                <p className="text-[10px] text-gray-500 mb-3">
+                <p className="text-[10px] text-text-secondary mb-3">
                   {total} entries / 30 days ({Math.round(pct)}% consistency)
                 </p>
 
@@ -126,9 +114,9 @@ export default function HabitView() {
                       <Line
                         type="monotone"
                         dataKey="value"
-                        stroke={color}
+                        stroke="#9ca3af"
                         strokeWidth={1.5}
-                        dot={{ fill: color, r: 2 }}
+                        dot={{ fill: '#9ca3af', r: 2 }}
                       />
                     </LineChart>
                   </ResponsiveContainer>
@@ -140,9 +128,9 @@ export default function HabitView() {
                     <tbody>
                       {entries.slice(0, 5).map((e) => (
                         <tr key={e.id} className="border-b border-charcoal-lighter/30">
-                          <td className="py-1 text-gray-400">{e.date}</td>
-                          <td className="py-1 text-right font-medium" style={{ color }}>{e.value}</td>
-                          <td className="py-1 pl-2 text-gray-500 truncate max-w-[100px]">{e.notes || ''}</td>
+                          <td className="py-1 text-text-secondary">{e.date}</td>
+                          <td className="py-1 text-right font-medium text-text-primary">{e.value}</td>
+                          <td className="py-1 pl-2 text-text-muted truncate max-w-[100px]">{e.notes || ''}</td>
                         </tr>
                       ))}
                     </tbody>

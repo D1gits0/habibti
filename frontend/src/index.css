@@ -7,7 +7,7 @@
     -webkit-tap-highlight-color: transparent;
   }
   body {
-    @apply antialiased;
+    @apply antialiased font-body;
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
   }
@@ -16,23 +16,6 @@
 @layer components {
   .panel {
     @apply bg-charcoal-light border border-charcoal-lighter rounded-lg;
-    box-shadow: 0 0 8px rgba(168, 85, 247, 0.08), inset 0 1px 0 rgba(255,255,255,0.03);
-  }
-  .panel-glow-purple {
-    box-shadow: 0 0 12px rgba(168, 85, 247, 0.15), inset 0 1px 0 rgba(255,255,255,0.03);
-    border-color: rgba(168, 85, 247, 0.3);
-  }
-  .panel-glow-red {
-    box-shadow: 0 0 12px rgba(232, 93, 74, 0.15), inset 0 1px 0 rgba(255,255,255,0.03);
-    border-color: rgba(232, 93, 74, 0.3);
-  }
-  .panel-glow-green {
-    box-shadow: 0 0 12px rgba(34, 197, 94, 0.15), inset 0 1px 0 rgba(255,255,255,0.03);
-    border-color: rgba(34, 197, 94, 0.3);
-  }
-  .panel-glow-blue {
-    box-shadow: 0 0 12px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(255,255,255,0.03);
-    border-color: rgba(59, 130, 246, 0.3);
   }
   .xp-bar {
     @apply h-3 rounded-full overflow-hidden bg-charcoal-lighter;
