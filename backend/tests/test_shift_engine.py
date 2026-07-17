@@ -34,73 +34,36 @@ def test_property_8_shift_correctness(cycle_start, days_ahead):
     """Property 8: Schedule shift algorithm correctness.
 
     For any valid cycle_start_date and any unavailable_date strictly after today:
-    - If a Rest day exists in remaining cycle after the unavailable_date,
-      the first Rest day is absorbed and cycle_start stays unchanged.
-    - If no Rest day exists in remaining cycle after the unavailable_date,
-      cycle_start shifts back by 1 day (pushing all future days forward by 1).
-    - Only the first Rest day encountered in forward order is absorbed.
+    - The cycle_start always shifts back by 1 day (pushing all future days forward by 1).
+    - Whether or not a Rest day exists in the remaining range, the shift applies.
 
-    **Validates: Requirements 6.1, 6.2, 6.3, 6.4, 6.8**
+    **Validates: Requirements 6.1, 6.8**
     """
     today = cycle_start  # Use cycle_start as "today" for testing purposes
     unavailable = today + timedelta(days=days_ahead)
 
-    # Compute what day_index the unavailable date has in the cycle
-    idx = (unavailable - cycle_start).days % 7
-
-    # Check remaining indices (after the unavailable day) for first Rest day
-    remaining_indices = list(range(idx + 1, 7))
-    has_rest_in_remaining = any(SPLIT_CYCLE[i] == "Rest" for i in remaining_indices)
-
     new_start = compute_shift(cycle_start, unavailable, SPLIT_CYCLE)
 
-    if has_rest_in_remaining:
-        # Rest absorbed: net effect is cycle_start unchanged (shift -1 + absorb +1 = 0)
-        assert new_start == cycle_start, (
-            f"Expected cycle_start unchanged ({cycle_start}) when rest is absorbed, "
-            f"got {new_start}. idx={idx}, remaining={remaining_indices}"
-        )
-    else:
-        # No rest in remaining: cycle_start shifted back by 1 day
-        assert new_start == cycle_start - timedelta(days=1), (
-            f"Expected cycle_start shifted back by 1 day ({cycle_start - timedelta(days=1)}), "
-            f"got {new_start}. idx={idx}, remaining={remaining_indices}"
-        )
+    # Shift always moves cycle_start back by 1 day
+    assert new_start == cycle_start - timedelta(days=1), (
+        f"Expected cycle_start shifted back by 1 day ({cycle_start - timedelta(days=1)}), "
+        f"got {new_start}."
+    )
+
 
 
 @settings(max_examples=100)
 @given(cycle_start=dates_strategy, days_ahead=st.integers(min_value=1, max_value=365))
-def test_property_8_only_first_rest_absorbed(cycle_start, days_ahead):
-    """Property 8 sub-property: Only the first Rest day is absorbed.
+def test_property_8_shift_always_minus_one(cycle_start, days_ahead):
+    """Property 8 sub-property: shift always produces cycle_start - 1 day.
 
-    When multiple Rest days exist in remaining indices, only the first one
-    should be absorbed. The algorithm should not absorb more than one Rest day.
+    Regardless of rest days in range, the shift always moves start back by 1.
 
-    **Validates: Requirements 6.3**
+    **Validates: Requirements 6.1, 6.8**
     """
-    today = cycle_start
-    unavailable = today + timedelta(days=days_ahead)
-
-    idx = (unavailable - cycle_start).days % 7
-    remaining_indices = list(range(idx + 1, 7))
-
-    # Count rest days in remaining indices
-    rest_count = sum(1 for i in remaining_indices if SPLIT_CYCLE[i] == "Rest")
-
+    unavailable = cycle_start + timedelta(days=days_ahead)
     new_start = compute_shift(cycle_start, unavailable, SPLIT_CYCLE)
-
-    if rest_count >= 2:
-        # Even with multiple rests, only one is absorbed, so net shift is still 0
-        assert new_start == cycle_start, (
-            f"With {rest_count} rest days in remaining, expected cycle_start unchanged "
-            f"(only first rest absorbed), got shift to {new_start}"
-        )
-    elif rest_count == 1:
-        # Single rest absorbed: cycle_start unchanged
-        assert new_start == cycle_start
-    else:
-        # No rest: full shift back by 1
-        assert new_start == cycle_start - timedelta(days=1)
+    assert new_start == cycle_start - timedelta(days=1)
 
 
 @settings(max_examples=100)
@@ -149,90 +112,69 @@ class TestComputeShiftExamples:
     """Example-based tests for compute_shift covering specific scenarios."""
 
     def test_unavailable_on_day_0_rest_at_day_3(self):
-        """When unavailable is on Pull (idx 0), Rest at idx 3 is absorbed.
+        """When unavailable is on Pull (idx 0), shift always applies.
 
         Remaining indices: [1, 2, 3, 4, 5, 6]
-        First Rest at idx 3 -> absorbed -> cycle_start unchanged.
+        Rest at idx 3 exists but shift always moves back by 1.
         """
         cycle_start = date(2024, 1, 1)  # Monday = Pull (idx 0)
         unavailable = date(2024, 1, 1)  # Same day -> idx 0
-        # remaining = [1,2,3,4,5,6], Rest at idx 3 -> absorbed
         result = compute_shift(cycle_start, unavailable, SPLIT_CYCLE)
-        assert result == cycle_start  # net zero shift
+        assert result == cycle_start - timedelta(days=1)
 
     def test_unavailable_on_day_5_no_rest_in_remaining(self):
         """When unavailable is on Rest (idx 5), remaining is just [6]=Lower.
 
-        No Rest in remaining -> shift back by 1.
+        Shift back by 1.
         """
         cycle_start = date(2024, 1, 1)
-        # idx 5 means 5 days after cycle_start
-        unavailable = date(2024, 1, 6)  # idx = (6-1).days % 7 = 5
-        # remaining = [6] = ["Lower"], no Rest -> shift back 1
+        unavailable = date(2024, 1, 6)  # idx = 5
         result = compute_shift(cycle_start, unavailable, SPLIT_CYCLE)
         assert result == cycle_start - timedelta(days=1)
 
     def test_unavailable_on_day_6_empty_remaining(self):
         """When unavailable is on Lower (idx 6), remaining is empty [].
 
-        No Rest in remaining (empty) -> shift back by 1.
+        Shift back by 1.
         """
         cycle_start = date(2024, 1, 1)
-        unavailable = date(2024, 1, 7)  # idx = 6 days % 7 = 6
-        # remaining = [], no rest -> shift back 1
+        unavailable = date(2024, 1, 7)  # idx = 6
         result = compute_shift(cycle_start, unavailable, SPLIT_CYCLE)
         assert result == cycle_start - timedelta(days=1)
 
-    def test_unavailable_on_day_2_rest_at_day_3(self):
-        """When unavailable is on Legs (idx 2), Rest at idx 3 is absorbed.
-
-        Remaining: [3, 4, 5, 6] -> Rest at idx 3 -> absorbed.
-        """
+    def test_unavailable_on_day_2(self):
+        """When unavailable is on Legs (idx 2), shift back by 1."""
         cycle_start = date(2024, 1, 1)
-        unavailable = date(2024, 1, 3)  # 2 days after start -> idx 2
-        # remaining = [3,4,5,6], SPLIT_CYCLE[3]="Rest" -> absorbed
+        unavailable = date(2024, 1, 3)  # idx 2
         result = compute_shift(cycle_start, unavailable, SPLIT_CYCLE)
-        assert result == cycle_start  # absorbed -> unchanged
+        assert result == cycle_start - timedelta(days=1)
 
-    def test_unavailable_on_day_3_rest_at_day_5_absorbed(self):
-        """When unavailable is on Rest (idx 3), remaining [4,5,6].
-
-        SPLIT_CYCLE[5] = "Rest" -> first rest in remaining is absorbed.
-        """
+    def test_unavailable_on_day_3(self):
+        """When unavailable is on Rest (idx 3), shift back by 1."""
         cycle_start = date(2024, 1, 1)
-        unavailable = date(2024, 1, 4)  # 3 days -> idx 3
-        # remaining = [4,5,6], SPLIT_CYCLE[4]="Upper", SPLIT_CYCLE[5]="Rest" -> absorbed
+        unavailable = date(2024, 1, 4)  # idx 3
         result = compute_shift(cycle_start, unavailable, SPLIT_CYCLE)
-        assert result == cycle_start  # absorbed -> unchanged
+        assert result == cycle_start - timedelta(days=1)
 
-    def test_unavailable_on_day_4_rest_at_day_5(self):
-        """When unavailable is on Upper (idx 4), remaining [5,6].
-
-        SPLIT_CYCLE[5] = "Rest" -> absorbed.
-        """
+    def test_unavailable_on_day_4(self):
+        """When unavailable is on Upper (idx 4), shift back by 1."""
         cycle_start = date(2024, 1, 1)
-        unavailable = date(2024, 1, 5)  # 4 days -> idx 4
-        # remaining = [5,6], SPLIT_CYCLE[5]="Rest" -> absorbed
+        unavailable = date(2024, 1, 5)  # idx 4
         result = compute_shift(cycle_start, unavailable, SPLIT_CYCLE)
-        assert result == cycle_start  # absorbed -> unchanged
+        assert result == cycle_start - timedelta(days=1)
 
     def test_unavailable_far_future_wraps_correctly(self):
-        """Shift works correctly when unavailable_date is many cycles away.
-
-        The modulo arithmetic should wrap correctly.
-        """
+        """Shift works correctly when unavailable_date is many cycles away."""
         cycle_start = date(2024, 1, 1)
-        # 14 days ahead -> idx = 14 % 7 = 0 (Pull), same as day 0
+        # 14 days ahead -> idx = 14 % 7 = 0 (Pull)
         unavailable = date(2024, 1, 15)
-        # remaining = [1,2,3,4,5,6], Rest at idx 3 -> absorbed
         result = compute_shift(cycle_start, unavailable, SPLIT_CYCLE)
-        assert result == cycle_start  # absorbed
+        assert result == cycle_start - timedelta(days=1)
 
     def test_shift_with_different_cycle_start(self):
         """Shift works with a non-January-1 cycle start."""
         cycle_start = date(2024, 6, 15)
-        # 6 days ahead -> idx = 6 (Lower), remaining = [] -> no rest
-        unavailable = date(2024, 6, 21)
+        unavailable = date(2024, 6, 21)  # idx 6
         result = compute_shift(cycle_start, unavailable, SPLIT_CYCLE)
         assert result == cycle_start - timedelta(days=1)
 

@@ -288,8 +288,10 @@ def shift_schedule(body: ShiftRequest):
     cycle_start_date = date.fromisoformat(cycle_start)
     new_cycle_start = compute_shift(cycle_start_date, unavailable, SPLIT_CYCLE)
 
-    # Check if a rest day was absorbed (new_cycle_start == old means rest absorbed the shift)
-    absorbed_rest = (new_cycle_start == cycle_start_date)
+    # Check if a rest day exists in the remaining cycle after the unavailable date
+    idx = (unavailable - cycle_start_date).days % 7
+    remaining_indices = list(range(idx + 1, 7))
+    absorbed_rest = any(SPLIT_CYCLE[i] == "Rest" for i in remaining_indices)
 
     # Persist the new cycle_start_date
     with get_db() as conn:

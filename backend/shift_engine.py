@@ -55,9 +55,10 @@ def compute_shift(
     # (pushing all future days forward by 1 calendar day)
     new_cycle_start_date = cycle_start_date - timedelta(days=1)
 
-    # Step 5: If a rest day was absorbed, compensate by shifting forward 1
-    if rest_found:
-        new_cycle_start_date = new_cycle_start_date + timedelta(days=1)
+    # Step 5: Record whether a rest day was found (informational for UI)
+    # Note: with a fixed 7-day repeating cycle, the rest day cannot be physically
+    # removed. The shift always applies; absorbed_rest indicates that a rest day
+    # falls in the affected range and effectively "covers" one shifted day.
 
     # Step 6: Return new cycle_start_date
     return new_cycle_start_date

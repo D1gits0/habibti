@@ -39,7 +39,12 @@ export default function Settings() {
   async function loadWeekPreview() {
     try {
       const week = await getWeekSchedule()
-      setWeekPreview(week)
+      // Endpoint returns a list when configured, or {configured: false, days: []} when not
+      if (Array.isArray(week)) {
+        setWeekPreview(week)
+      } else {
+        setWeekPreview(week.days || [])
+      }
     } catch (err) {
       // Non-critical: week preview may fail if not configured
       setWeekPreview([])
