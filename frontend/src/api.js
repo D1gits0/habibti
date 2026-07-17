@@ -6,7 +6,14 @@ async function request(url, options = {}) {
     ...options,
   });
   if (res.status === 204) return null;
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) {
+    let detail = `API error: ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body.detail) detail = body.detail;
+    } catch {}
+    throw new Error(detail);
+  }
   return res.json();
 }
 
@@ -35,3 +42,17 @@ export const updateLog = (id, data) =>
   request(`/logs/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 export const deleteLog = (id) =>
   request(`/logs/${id}`, { method: 'DELETE' });
+
+// Natural Language
+export const parseNaturalLanguage = (data) =>
+  request('/nl/parse', { method: 'POST', body: JSON.stringify(data) });
+
+// Schedule
+export const getTodaySchedule = () => request('/schedule/today');
+export const getWeekSchedule = (startDate) =>
+  request(`/schedule/week${startDate ? `?start_date=${startDate}` : ''}`);
+export const getScheduleConfig = () => request('/schedule/config');
+export const updateScheduleConfig = (data) =>
+  request('/schedule/config', { method: 'PUT', body: JSON.stringify(data) });
+export const shiftSchedule = (data) =>
+  request('/schedule/shift', { method: 'POST', body: JSON.stringify(data) });

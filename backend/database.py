@@ -48,3 +48,24 @@ def init_db():
                 notes TEXT
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS split_schedule (
+                day_index INTEGER PRIMARY KEY CHECK(day_index >= 0 AND day_index <= 6),
+                day_type TEXT NOT NULL CHECK(day_type IN ('Pull','Push','Legs','Rest','Upper','Lower'))
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS schedule_state (
+                id INTEGER PRIMARY KEY CHECK(id = 1),
+                cycle_start_date TEXT
+            )
+        """)
+        # Seed split_schedule if empty
+        count = conn.execute("SELECT COUNT(*) FROM split_schedule").fetchone()[0]
+        if count == 0:
+            conn.executemany(
+                "INSERT INTO split_schedule (day_index, day_type) VALUES (?, ?)",
+                [(0, 'Pull'), (1, 'Push'), (2, 'Legs'), (3, 'Rest'), (4, 'Upper'), (5, 'Rest'), (6, 'Lower')]
+            )
+        # Ensure schedule_state single-row exists
+        conn.execute("INSERT OR IGNORE INTO schedule_state (id, cycle_start_date) VALUES (1, NULL)")

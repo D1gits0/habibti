@@ -1,14 +1,20 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import os
 
 from database import init_db, get_db
 from models import (
     ThreadCreate, ThreadUpdate, ThreadResponse,
     LogCreate, LogUpdate, LogResponse,
+    ScheduleConfigUpdate, ScheduleConfigResponse, ScheduleTodayResponse,
+    WeekDayResponse, ShiftRequest, ShiftResponse,
+    NLParseRequest, NLParseResponse,
 )
+from schedule_engine import get_day_type, get_day_index, get_week_schedule, SPLIT_CYCLE
+from shift_engine import compute_shift, validate_shift_request
+from nl_parser import NLParserService
 
 # Force fresh deploy
 app = FastAPI(title="Compound API")
@@ -180,3 +186,148 @@ def delete_log(log_id: int):
         if not existing:
             raise HTTPException(status_code=404, detail="Log not found")
         conn.execute("DELETE FROM logs WHERE id = ?", (log_id,))
+
+
+# ─── SCHEDULE ────────────────────────────────────────────────────────────────────
+
+@app.get("/api/schedule/today")
+def get_today_schedule():
+    """Returns today's day type or configured=false if no cycle_start_date set."""
+    today = date.today()
+    with get_db() as conn:
+        row = conn.execute("SELECT cycle_start_date FROM schedule_state WHERE id = 1").fetchone()
+        cycle_start = row["cycle_start_date"] if row else None
+
+    if not cycle_start:
+        return {
+            "date": today.isoformat(),
+            "day_type": None,
+            "day_index": None,
+            "configured": False,
+        }
+
+    cycle_start_date = date.fromisoformat(cycle_start)
+    return {
+        "date": today.isoformat(),
+        "day_type": get_day_type(cycle_start_date, today),
+        "day_index": get_day_index(cycle_start_date, today),
+        "configured": True,
+    }
+
+
+@app.get("/api/schedule/week")
+def get_week_schedule_endpoint(start_date: Optional[str] = None):
+    """Returns next 7 days with day_type for each. Uses today if start_date not provided."""
+    with get_db() as conn:
+        row = conn.execute("SELECT cycle_start_date FROM schedule_state WHERE id = 1").fetchone()
+        cycle_start = row["cycle_start_date"] if row else None
+
+    if not cycle_start:
+        return {"configured": False, "days": []}
+
+    cycle_start_date = date.fromisoformat(cycle_start)
+    start = date.fromisoformat(start_date) if start_date else date.today()
+    days = get_week_schedule(cycle_start_date, start)
+    return days
+
+
+@app.get("/api/schedule/config")
+def get_schedule_config():
+    """Returns current schedule configuration."""
+    with get_db() as conn:
+        row = conn.execute("SELECT cycle_start_date FROM schedule_state WHERE id = 1").fetchone()
+        cycle_start = row["cycle_start_date"] if row else None
+        split_rows = conn.execute("SELECT day_index, day_type FROM split_schedule ORDER BY day_index").fetchall()
+
+    split_cycle = [{"day_index": r["day_index"], "day_type": r["day_type"]} for r in split_rows]
+    return {
+        "cycle_start_date": cycle_start,
+        "split_cycle": split_cycle,
+    }
+
+
+@app.put("/api/schedule/config")
+def update_schedule_config(body: ScheduleConfigUpdate):
+    """Update cycle_start_date. Validates date range (±30 days from today)."""
+    try:
+        new_date = date.fromisoformat(body.cycle_start_date)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid date format")
+
+    today = date.today()
+    if abs((new_date - today).days) > 30:
+        raise HTTPException(status_code=422, detail="Date must be within 30 days of today")
+
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE schedule_state SET cycle_start_date = ? WHERE id = 1",
+            (new_date.isoformat(),),
+        )
+
+    return {"cycle_start_date": new_date.isoformat()}
+
+
+@app.post("/api/schedule/shift")
+def shift_schedule(body: ShiftRequest):
+    """Mark a day unavailable, shift schedule forward. Validates future date."""
+    try:
+        unavailable = date.fromisoformat(body.unavailable_date)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid date format")
+
+    today = date.today()
+    error = validate_shift_request(unavailable, today)
+    if error:
+        raise HTTPException(status_code=422, detail=error)
+
+    with get_db() as conn:
+        row = conn.execute("SELECT cycle_start_date FROM schedule_state WHERE id = 1").fetchone()
+        cycle_start = row["cycle_start_date"] if row else None
+
+    if not cycle_start:
+        raise HTTPException(status_code=422, detail="Schedule not configured")
+
+    cycle_start_date = date.fromisoformat(cycle_start)
+    new_cycle_start = compute_shift(cycle_start_date, unavailable, SPLIT_CYCLE)
+
+    # Check if a rest day was absorbed (new_cycle_start == old means rest absorbed the shift)
+    absorbed_rest = (new_cycle_start == cycle_start_date)
+
+    # Persist the new cycle_start_date
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE schedule_state SET cycle_start_date = ? WHERE id = 1",
+            (new_cycle_start.isoformat(),),
+        )
+
+    # Return updated week schedule starting from today
+    week = get_week_schedule(new_cycle_start, today)
+    return {
+        "new_cycle_start_date": new_cycle_start.isoformat(),
+        "week_schedule": week,
+        "absorbed_rest": absorbed_rest,
+    }
+
+
+# ─── NATURAL LANGUAGE PARSE ──────────────────────────────────────────────────────
+
+@app.post("/api/nl/parse", response_model=NLParseResponse)
+async def parse_natural_language(body: NLParseRequest):
+    """Parse free-text, return structured entries for confirmation."""
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
+
+    service = NLParserService(api_key=api_key)
+
+    try:
+        result = await service.parse_input(body.text, date.today().isoformat())
+    except TimeoutError:
+        raise HTTPException(status_code=504, detail="Claude API timed out. Please retry.")
+    except ValueError as e:
+        raise HTTPException(
+            status_code=422,
+            detail="Could not parse input into valid entries",
+        )
+
+    return result
