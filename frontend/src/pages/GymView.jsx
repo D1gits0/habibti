@@ -21,9 +21,18 @@ export default function GymView() {
     }
   }
 
+  // Compute personal records: max value per metric
+  const personalRecords = metrics.reduce((acc, m) => {
+    const values = logs.filter((l) => l.metric === m).map((l) => l.value)
+    if (values.length > 0) {
+      acc[m] = Math.max(...values)
+    }
+    return acc
+  }, {})
+
   const chartData = logs
     .filter((l) => l.metric === selectedMetric)
-    .reverse()
+    .sort((a, b) => a.date.localeCompare(b.date))
     .map((l) => ({
       date: l.date,
       value: l.value,
@@ -32,79 +41,105 @@ export default function GymView() {
 
   const recentLogs = logs.slice(0, 20)
 
+  // Req 3.7: If no gym log entries exist, show a single empty-state replacing both chart and table
+  if (logs.length === 0) {
+    return (
+      <div className="md:mt-12">
+        <h1 className="font-body text-text-primary text-sm md:text-base mb-4">Gym Log</h1>
+        <div className="panel p-6 text-center text-text-secondary text-sm">
+          No gym data logged yet. Start logging exercises to track your progress.
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="md:mt-12">
-      <h1 className="font-pixel text-gym-red text-xs md:text-sm mb-4">🏋️ GYM LOG</h1>
+      <h1 className="font-body text-text-primary text-sm md:text-base mb-4">Gym Log</h1>
 
-      {/* Metric selector */}
-      {metrics.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-4">
-          {metrics.map((m) => (
-            <button
-              key={m}
-              onClick={() => setSelectedMetric(m)}
-              className={`px-3 py-1.5 rounded text-xs border transition-colors ${
-                selectedMetric === m
-                  ? 'bg-gym-red/20 border-gym-red/40 text-gym-red'
-                  : 'border-charcoal-lighter text-gray-400 hover:border-gray-500'
-              }`}
+      {/* Chart Section */}
+      <section className="mb-6">
+        <h2 className="font-body text-text-primary text-xs mb-3">Progress Chart</h2>
+
+        {/* Metric selector dropdown */}
+        {metrics.length > 0 && (
+          <div className="mb-3">
+            <select
+              value={selectedMetric}
+              onChange={(e) => setSelectedMetric(e.target.value)}
+              className="bg-charcoal-light border border-charcoal-lighter rounded px-3 py-1.5 text-xs text-text-muted font-body focus:outline-none focus:border-text-secondary"
             >
-              {m.replace(/_/g, ' ')}
-            </button>
-          ))}
-        </div>
-      )}
+              {metrics.map((m) => (
+                <option key={m} value={m}>
+                  {m.replace(/_/g, ' ')}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
-      {/* Chart */}
-      {chartData.length > 0 ? (
-        <div className="panel panel-glow-red p-4 mb-6">
-          <p className="font-pixel text-[8px] text-gray-400 mb-3">
-            {selectedMetric.replace(/_/g, ' ').toUpperCase()} OVER TIME
-          </p>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3a" />
-              <XAxis
-                dataKey="date"
-                stroke="#6b7280"
-                tick={{ fontSize: 10, fill: '#6b7280' }}
-                tickFormatter={(v) => v.slice(5)}
-              />
-              <YAxis stroke="#6b7280" tick={{ fontSize: 10, fill: '#6b7280' }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#242430',
-                  border: '1px solid #2e2e3a',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                }}
-                labelStyle={{ color: '#9ca3af' }}
-              />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke="#e85d4a"
-                strokeWidth={2}
-                dot={{ fill: '#e85d4a', r: 3 }}
-                activeDot={{ r: 5, fill: '#f59e0b' }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <div className="panel p-6 mb-6 text-center text-gray-500 text-sm">
-          {metrics.length === 0 ? 'No gym logs yet. Log some sets!' : 'Select a metric above.'}
-        </div>
-      )}
+        {/* Req 3.8: If selected metric has no entries, show empty in chart only */}
+        {chartData.length > 0 ? (
+          <div className="panel p-4">
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3a" />
+                <XAxis
+                  dataKey="date"
+                  stroke="#6b7280"
+                  tick={{ fontSize: 10, fill: '#6b7280' }}
+                  tickFormatter={(v) => v.slice(5)}
+                />
+                <YAxis stroke="#6b7280" tick={{ fontSize: 10, fill: '#6b7280' }} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#242430',
+                    border: '1px solid #2e2e3a',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                  }}
+                  labelStyle={{ color: '#9ca3af' }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke="#9ca3af"
+                  strokeWidth={2}
+                  dot={(props) => {
+                    const { cx, cy, payload } = props
+                    const isPR = payload.value === personalRecords[selectedMetric]
+                    return (
+                      <circle
+                        key={`dot-${payload.date}`}
+                        cx={cx}
+                        cy={cy}
+                        r={isPR ? 5 : 3}
+                        fill={isPR ? '#FF4F00' : '#9ca3af'}
+                        stroke="none"
+                      />
+                    )
+                  }}
+                  activeDot={{ r: 5, fill: '#9ca3af' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="panel p-6 text-center text-text-secondary text-sm">
+            No data for this metric.
+          </div>
+        )}
+      </section>
 
-      {/* Recent entries table */}
-      <div className="panel p-4">
-        <p className="font-pixel text-[8px] text-gray-400 mb-3">RECENT ENTRIES</p>
-        {recentLogs.length > 0 ? (
+      {/* Recent Entries Table Section */}
+      <section>
+        <h2 className="font-body text-text-primary text-xs mb-3">Recent Entries</h2>
+
+        <div className="panel p-4">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-gray-400 text-xs border-b border-charcoal-lighter">
+                <tr className="text-text-muted text-xs border-b border-charcoal-lighter">
                   <th className="text-left pb-2 pr-3">Date</th>
                   <th className="text-left pb-2 pr-3">Exercise</th>
                   <th className="text-right pb-2 pr-3">Value</th>
@@ -114,19 +149,17 @@ export default function GymView() {
               <tbody>
                 {recentLogs.map((log) => (
                   <tr key={log.id} className="border-b border-charcoal-lighter/50">
-                    <td className="py-2 pr-3 text-gray-400 text-xs">{log.date}</td>
-                    <td className="py-2 pr-3 text-gray-200">{log.metric.replace(/_/g, ' ')}</td>
-                    <td className="py-2 pr-3 text-right text-gym-red font-medium">{log.value}</td>
-                    <td className="py-2 text-gray-400 text-xs truncate max-w-[120px]">{log.notes || '—'}</td>
+                    <td className="py-2 pr-3 text-text-secondary text-xs">{log.date}</td>
+                    <td className="py-2 pr-3 text-text-primary">{log.metric.replace(/_/g, ' ')}</td>
+                    <td className={`py-2 pr-3 text-right ${log.value === personalRecords[log.metric] ? 'text-accent font-bold' : 'text-text-muted'}`}>{log.value}</td>
+                    <td className="py-2 text-text-secondary text-xs truncate max-w-[120px]">{log.notes || '—'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        ) : (
-          <p className="text-gray-500 text-sm">No entries yet.</p>
-        )}
-      </div>
+        </div>
+      </section>
     </div>
   )
 }

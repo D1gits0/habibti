@@ -9,10 +9,10 @@ const STATUS_LABELS = {
   done: 'Complete',
 }
 const STATUS_COLORS = {
-  not_started: 'bg-gray-600 text-gray-200',
-  in_progress: 'bg-quest-purple/20 text-quest-purple border border-quest-purple/40',
-  blocked: 'bg-gym-red/20 text-gym-red border border-gym-red/40',
-  done: 'bg-habit-green/20 text-habit-green border border-habit-green/40',
+  not_started: 'bg-charcoal-lighter text-text-muted',
+  in_progress: 'bg-charcoal-lighter text-text-primary border border-charcoal-lighter',
+  blocked: 'bg-charcoal-lighter text-text-secondary border border-charcoal-lighter',
+  done: 'bg-charcoal-lighter text-text-muted border border-charcoal-lighter',
 }
 const CATEGORIES = ['transfer_app', 'club', 'research', 'school', 'personal_project']
 
@@ -68,12 +68,12 @@ export default function ThreadsBoard() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4 md:mt-12">
-        <h1 className="font-pixel text-quest-purple text-xs md:text-sm">⚔️ QUEST BOARD</h1>
+        <h1 className="font-body text-text-primary text-xs md:text-sm">THREADS BOARD</h1>
         <div className="flex gap-2 items-center">
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="bg-charcoal-lighter border border-charcoal-lighter rounded px-2 py-1 text-sm text-gray-300"
+            className="bg-charcoal-lighter border border-charcoal-lighter rounded px-2 py-1 text-sm text-text-secondary font-body"
           >
             <option value="">All Categories</option>
             {CATEGORIES.map((c) => (
@@ -82,27 +82,27 @@ export default function ThreadsBoard() {
           </select>
           <button
             onClick={() => setShowForm(!showForm)}
-            className="bg-quest-purple/20 border border-quest-purple/40 text-quest-purple px-3 py-1 rounded text-sm hover:bg-quest-purple/30 transition-colors"
+            className="bg-charcoal-lighter border border-charcoal-lighter text-text-secondary px-3 py-1 rounded text-sm font-body hover:bg-charcoal-light transition-colors"
           >
-            + New Quest
+            + New Thread
           </button>
         </div>
       </div>
 
       {showForm && (
-        <form onSubmit={handleCreate} className="panel panel-glow-purple p-4 mb-4 flex flex-col gap-3">
+        <form onSubmit={handleCreate} className="bg-charcoal-light border border-charcoal-lighter rounded p-4 mb-4 flex flex-col gap-3">
           <input
             type="text"
-            placeholder="Quest name..."
+            placeholder="Thread name..."
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             required
-            className="bg-charcoal border border-charcoal-lighter rounded px-3 py-2 text-sm placeholder-gray-500"
+            className="bg-charcoal border border-charcoal-lighter rounded px-3 py-2 text-sm font-body text-text-primary placeholder-text-muted"
           />
           <select
             value={form.category}
             onChange={(e) => setForm({ ...form, category: e.target.value })}
-            className="bg-charcoal border border-charcoal-lighter rounded px-3 py-2 text-sm text-gray-300"
+            className="bg-charcoal border border-charcoal-lighter rounded px-3 py-2 text-sm font-body text-text-secondary"
           >
             {CATEGORIES.map((c) => (
               <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
@@ -113,10 +113,10 @@ export default function ThreadsBoard() {
             placeholder="Next action (optional)"
             value={form.next_action}
             onChange={(e) => setForm({ ...form, next_action: e.target.value })}
-            className="bg-charcoal border border-charcoal-lighter rounded px-3 py-2 text-sm placeholder-gray-500"
+            className="bg-charcoal border border-charcoal-lighter rounded px-3 py-2 text-sm font-body text-text-primary placeholder-text-muted"
           />
-          <button type="submit" className="bg-quest-purple text-white px-4 py-2 rounded text-sm font-medium hover:bg-quest-purple/80 transition-colors">
-            Create Quest
+          <button type="submit" className="bg-charcoal-lighter text-text-primary px-4 py-2 rounded text-sm font-body font-medium hover:bg-charcoal-light transition-colors">
+            Create Thread
           </button>
         </form>
       )}
@@ -124,18 +124,18 @@ export default function ThreadsBoard() {
       {/* Mobile: stacked collapsible */}
       <div className="flex flex-col gap-3 md:hidden">
         {STATUSES.map((status) => (
-          <div key={status} className="panel p-3">
+          <div key={status} className="bg-charcoal-light border border-charcoal-lighter rounded p-3">
             <button
               onClick={() => toggleCollapse(status)}
               className="w-full flex items-center justify-between"
             >
               <span className={`badge ${STATUS_COLORS[status]}`}>{STATUS_LABELS[status]}</span>
-              <span className="text-gray-400 text-sm">{grouped[status].length}</span>
+              <span className="text-text-muted text-sm font-body">{grouped[status].length}</span>
             </button>
             {!collapsed[status] && (
               <div className="mt-3 flex flex-col gap-2">
                 {grouped[status].map((thread) => (
-                  <QuestCard
+                  <ThreadCard
                     key={thread.id}
                     thread={thread}
                     onStatusChange={handleStatusChange}
@@ -143,7 +143,7 @@ export default function ThreadsBoard() {
                   />
                 ))}
                 {grouped[status].length === 0 && (
-                  <p className="text-gray-500 text-xs italic">No quests</p>
+                  <p className="text-text-muted text-xs italic font-body">No threads</p>
                 )}
               </div>
             )}
@@ -157,10 +157,10 @@ export default function ThreadsBoard() {
           <div key={status} className="flex flex-col gap-2">
             <div className="flex items-center justify-between mb-2">
               <span className={`badge ${STATUS_COLORS[status]}`}>{STATUS_LABELS[status]}</span>
-              <span className="text-gray-500 text-xs">{grouped[status].length}</span>
+              <span className="text-text-muted text-xs font-body">{grouped[status].length}</span>
             </div>
             {grouped[status].map((thread) => (
-              <QuestCard
+              <ThreadCard
                 key={thread.id}
                 thread={thread}
                 onStatusChange={handleStatusChange}
@@ -174,22 +174,22 @@ export default function ThreadsBoard() {
   )
 }
 
-function QuestCard({ thread, onStatusChange, onDelete }) {
+function ThreadCard({ thread, onStatusChange, onDelete }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
     <div
-      className="panel p-3 hover:scale-[1.01] transition-transform cursor-pointer"
+      className="bg-charcoal-light border border-charcoal-lighter rounded p-3 hover:bg-charcoal-lighter transition-colors cursor-pointer"
       onClick={() => setExpanded(!expanded)}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-sm font-medium text-gray-100">{thread.name}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{thread.category.replace(/_/g, ' ')}</p>
+          <p className="text-sm font-medium font-body text-text-primary">{thread.name}</p>
+          <p className="text-xs font-body text-text-secondary mt-0.5">{thread.category.replace(/_/g, ' ')}</p>
         </div>
       </div>
       {thread.next_action && (
-        <p className="text-xs text-gray-400 mt-2 border-l-2 border-quest-purple/40 pl-2">
+        <p className="text-xs font-body text-text-muted mt-2 border-l-2 border-charcoal-lighter pl-2">
           → {thread.next_action}
         </p>
       )}
@@ -199,14 +199,14 @@ function QuestCard({ thread, onStatusChange, onDelete }) {
             <button
               key={s}
               onClick={() => onStatusChange(thread.id, s)}
-              className={`badge text-[7px] ${STATUS_COLORS[s]} cursor-pointer hover:opacity-80`}
+              className={`badge text-[7px] font-body ${STATUS_COLORS[s]} cursor-pointer hover:opacity-80`}
             >
               → {STATUS_LABELS[s]}
             </button>
           ))}
           <button
             onClick={() => onDelete(thread.id)}
-            className="badge text-[7px] bg-red-900/30 text-red-400 border border-red-800/40 hover:opacity-80"
+            className="badge text-[7px] font-body bg-charcoal-lighter text-text-secondary border border-charcoal-lighter hover:opacity-80"
           >
             Delete
           </button>
