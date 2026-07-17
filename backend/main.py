@@ -10,11 +10,9 @@ from models import (
     LogCreate, LogUpdate, LogResponse,
     ScheduleConfigUpdate, ScheduleConfigResponse, ScheduleTodayResponse,
     WeekDayResponse, ShiftRequest, ShiftResponse,
-    NLParseRequest, NLParseResponse,
 )
 from schedule_engine import get_day_type, get_day_index, get_week_schedule, SPLIT_CYCLE
 from shift_engine import compute_shift, validate_shift_request
-from nl_parser import NLParserService
 
 # Force fresh deploy
 app = FastAPI(title="Compound API")
@@ -309,25 +307,3 @@ def shift_schedule(body: ShiftRequest):
     }
 
 
-# ─── NATURAL LANGUAGE PARSE ──────────────────────────────────────────────────────
-
-@app.post("/api/nl/parse", response_model=NLParseResponse)
-async def parse_natural_language(body: NLParseRequest):
-    """Parse free-text, return structured entries for confirmation."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
-
-    service = NLParserService(api_key=api_key)
-
-    try:
-        result = await service.parse_input(body.text, date.today().isoformat())
-    except TimeoutError:
-        raise HTTPException(status_code=504, detail="Claude API timed out. Please retry.")
-    except ValueError as e:
-        raise HTTPException(
-            status_code=422,
-            detail="Could not parse input into valid entries",
-        )
-
-    return result
