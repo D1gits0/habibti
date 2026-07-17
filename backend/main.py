@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from datetime import datetime, date
+import os
 
 from database import init_db, get_db
 from models import (
@@ -14,7 +15,9 @@ app = FastAPI(title="Compound API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        os.environ.get("CORS_ORIGIN", "http://localhost:5173"),
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
