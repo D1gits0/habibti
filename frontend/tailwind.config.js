@@ -13,7 +13,6 @@ export default {
         'text-muted': '#9ca3af',
       },
       fontFamily: {
-        pixel: ['"Press Start 2P"', 'cursive'],
         body: ['"JetBrains Mono"', 'monospace'],
       },
     },

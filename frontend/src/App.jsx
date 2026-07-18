@@ -5,10 +5,10 @@ import HabitView from './pages/HabitView'
 import Settings from './pages/Settings'
 
 const navItems = [
-  { to: '/', label: 'Quests', icon: '⚔️' },
-  { to: '/habits', label: 'Habits', icon: '🌿' },
-  { to: '/gym', label: 'Gym', icon: '🏋️' },
-  { to: '/settings', label: 'Settings', icon: '⚙️' },
+  { to: '/', label: 'Projects' },
+  { to: '/habits', label: 'Habits' },
+  { to: '/gym', label: 'Gym' },
+  { to: '/settings', label: 'Settings' },
 ]
 
 export default function App() {
@@ -38,28 +38,26 @@ export default function App() {
                 }`
               }
             >
-              <span className="text-lg">{item.icon}</span>
-              <span className="font-body text-[8px]">{item.label}</span>
+              <span className="font-body text-[10px]">{item.label}</span>
             </NavLink>
           ))}
         </nav>
 
         {/* Top nav - desktop */}
         <nav className="hidden md:flex fixed top-0 left-0 right-0 bg-charcoal-light border-b border-charcoal-lighter items-center px-6 py-3 z-50">
-          <span className="font-body text-text-primary text-sm mr-8">COMPOUND</span>
+          <span className="font-body text-text-primary text-sm mr-8">HABIBTI</span>
           <div className="flex gap-6">
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
-                  `flex items-center gap-2 text-sm font-body transition-colors ${
+                  `text-sm font-body transition-colors ${
                     isActive ? 'text-text-primary' : 'text-text-secondary hover:text-text-muted'
                   }`
                 }
               >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
+                {item.label}
               </NavLink>
             ))}
           </div>

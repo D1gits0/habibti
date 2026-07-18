@@ -24,6 +24,6 @@
     @apply h-full rounded-full transition-all duration-700 ease-out;
   }
   .badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-pixel uppercase tracking-wider;
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-body uppercase tracking-wider;
   }
 }
