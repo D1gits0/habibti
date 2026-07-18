@@ -191,6 +191,7 @@ function ProjectCard({ thread, onStatusChange, onDelete }) {
   const [completionPercentage, setCompletionPercentage] = useState(0)
   const [showSubtasks, setShowSubtasks] = useState(false)
   const [error, setError] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   useEffect(() => {
     if (showSubtasks) {
@@ -276,12 +277,30 @@ function ProjectCard({ thread, onStatusChange, onDelete }) {
                 → {STATUS_LABELS[s]}
               </button>
             ))}
-            <button
-              onClick={() => onDelete(thread.id)}
-              className="badge text-[7px] font-body bg-charcoal-lighter text-text-secondary border border-charcoal-lighter hover:opacity-80"
-            >
-              Delete
-            </button>
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="badge text-[7px] font-body bg-charcoal-lighter text-text-secondary border border-charcoal-lighter hover:opacity-80"
+              >
+                Delete
+              </button>
+            ) : (
+              <span className="flex items-center gap-1">
+                <span className="text-[9px] text-red-400 font-body">Delete?</span>
+                <button
+                  onClick={() => { onDelete(thread.id); setConfirmDelete(false) }}
+                  className="badge text-[7px] font-body bg-red-900/30 text-red-400 border border-red-500/50 hover:bg-red-900/50"
+                >
+                  Yes
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  className="badge text-[7px] font-body bg-charcoal-lighter text-text-muted border border-charcoal-lighter hover:opacity-80"
+                >
+                  No
+                </button>
+              </span>
+            )}
           </div>
 
           <button
