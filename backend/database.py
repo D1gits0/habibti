@@ -67,5 +67,22 @@ def init_db():
                 "INSERT INTO split_schedule (day_index, day_type) VALUES (?, ?)",
                 [(0, 'Pull'), (1, 'Push'), (2, 'Legs'), (3, 'Rest'), (4, 'Upper'), (5, 'Rest'), (6, 'Lower')]
             )
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS subtasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                thread_id INTEGER NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+                parent_subtask_id INTEGER REFERENCES subtasks(id) ON DELETE CASCADE,
+                description TEXT NOT NULL CHECK(length(description) <= 300 AND length(trim(description)) > 0),
+                done INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_subtasks_thread ON subtasks(thread_id)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_subtasks_parent ON subtasks(parent_subtask_id)
+        """)
         # Ensure schedule_state single-row exists
         conn.execute("INSERT OR IGNORE INTO schedule_state (id, cycle_start_date) VALUES (1, NULL)")

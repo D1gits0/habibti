@@ -1,11 +1,9 @@
-import { useState } from 'react'
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
-import ThreadsBoard from './pages/ThreadsBoard'
+import ProjectsBoard from './pages/ProjectsBoard'
 import QAFlow from './pages/QAFlow'
-import GymView from './pages/GymView'
+import GymPage from './pages/GymPage'
 import HabitView from './pages/HabitView'
 import Settings from './pages/Settings'
-import NLInputModal from './components/NLInputModal'
 
 const navItems = [
   { to: '/', label: 'Quests', icon: '⚔️' },
@@ -16,16 +14,14 @@ const navItems = [
 ]
 
 export default function App() {
-  const [nlModalOpen, setNlModalOpen] = useState(false)
-
   return (
     <BrowserRouter>
       <div className="flex flex-col min-h-screen">
         <main className="flex-1 pb-20 md:pb-4 px-3 md:px-6 pt-4">
           <Routes>
-            <Route path="/" element={<ThreadsBoard />} />
+            <Route path="/" element={<ProjectsBoard />} />
             <Route path="/log" element={<QAFlow />} />
-            <Route path="/gym" element={<GymView />} />
+            <Route path="/gym" element={<GymPage />} />
             <Route path="/habits" element={<HabitView />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
@@ -48,14 +44,6 @@ export default function App() {
               <span className="font-body text-[8px]">{item.label}</span>
             </NavLink>
           ))}
-          <button
-            onClick={() => setNlModalOpen(true)}
-            className="flex flex-col items-center gap-0.5 text-xs transition-colors text-text-secondary hover:text-text-muted"
-            aria-label="Quick natural language input"
-          >
-            <span className="text-lg">💬</span>
-            <span className="font-body text-[8px]">Quick</span>
-          </button>
         </nav>
 
         {/* Top nav - desktop */}
@@ -76,20 +64,9 @@ export default function App() {
                 <span>{item.label}</span>
               </NavLink>
             ))}
-            <button
-              onClick={() => setNlModalOpen(true)}
-              className="flex items-center gap-2 text-sm font-body transition-colors text-text-secondary hover:text-text-muted"
-              aria-label="Quick natural language input"
-            >
-              <span>💬</span>
-              <span>Quick</span>
-            </button>
           </div>
         </nav>
         <div className="hidden md:block h-14" /> {/* spacer for top nav */}
-
-        {/* NL Input Modal */}
-        <NLInputModal isOpen={nlModalOpen} onClose={() => setNlModalOpen(false)} />
       </div>
     </BrowserRouter>
   )

@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react'
-import { getLogs } from '../api'
+import { useState, useEffect, useCallback } from 'react'
+import { getLogs, upsertLog } from '../api'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import InlineInput from '../components/InlineInput'
 
 const HABIT_CATEGORIES = ['sleep', 'hydration', 'habit']
 
 export default function HabitView() {
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [inlineEdit, setInlineEdit] = useState(null) // { date, metric, category, existingValue, position }
 
   useEffect(() => {
     loadLogs()
@@ -23,6 +25,58 @@ export default function HabitView() {
     setLogs(allLogs.flat())
     setLoading(false)
   }
+
+  // Handle chart data point click
+  const handleDotClick = useCallback((metric, category, chartData) => (data, index, e) => {
+    if (!data || !data.payload) return
+    const { date, value } = data.payload
+
+    // Get position from the mouse event or the dot element
+    const rect = e?.target?.getBoundingClientRect?.()
+    const parentRect = e?.target?.closest?.('.recharts-wrapper')?.getBoundingClientRect?.()
+
+    let x = 0
+    let y = 0
+    if (rect && parentRect) {
+      x = rect.left - parentRect.left + rect.width / 2
+      y = rect.top - parentRect.top - 60 // position above the point
+    } else if (e?.clientX != null) {
+      // Fallback to click coordinates relative to the chart wrapper
+      const wrapper = e?.target?.closest?.('.recharts-wrapper')
+      if (wrapper) {
+        const wrapperRect = wrapper.getBoundingClientRect()
+        x = e.clientX - wrapperRect.left
+        y = e.clientY - wrapperRect.top - 60
+      }
+    }
+
+    setInlineEdit({
+      date,
+      metric,
+      category,
+      existingValue: value,
+      position: { x: Math.max(0, x), y: Math.max(0, y) },
+    })
+  }, [])
+
+  // Handle save from InlineInput
+  const handleSave = useCallback(async (value) => {
+    if (!inlineEdit) return
+    const { date, metric, category } = inlineEdit
+
+    await upsertLog({ date, metric, category, value })
+
+    // Dismiss the input
+    setInlineEdit(null)
+
+    // Refresh chart data
+    await loadLogs()
+  }, [inlineEdit])
+
+  // Handle dismiss
+  const handleDismiss = useCallback(() => {
+    setInlineEdit(null)
+  }, [])
 
   // Group by category then metric
   const grouped = {}
@@ -91,35 +145,56 @@ export default function HabitView() {
                   {total} entries / 30 days ({Math.round(pct)}% consistency)
                 </p>
 
-                {/* Mini chart */}
+                {/* Mini chart with clickable data points */}
                 {chartData.length > 1 && (
-                  <ResponsiveContainer width="100%" height={100}>
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3a" />
-                      <XAxis
-                        dataKey="date"
-                        stroke="#6b7280"
-                        tick={{ fontSize: 9, fill: '#6b7280' }}
-                        tickFormatter={(v) => v.slice(5)}
+                  <div className="relative">
+                    <ResponsiveContainer width="100%" height={100}>
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3a" />
+                        <XAxis
+                          dataKey="date"
+                          stroke="#6b7280"
+                          tick={{ fontSize: 9, fill: '#6b7280' }}
+                          tickFormatter={(v) => v.slice(5)}
+                        />
+                        <YAxis stroke="#6b7280" tick={{ fontSize: 9, fill: '#6b7280' }} width={30} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: '#242430',
+                            border: '1px solid #2e2e3a',
+                            borderRadius: '8px',
+                            fontSize: '11px',
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="value"
+                          stroke="#9ca3af"
+                          strokeWidth={1.5}
+                          dot={{ fill: '#9ca3af', r: 3, cursor: 'pointer' }}
+                          activeDot={{
+                            r: 5,
+                            fill: '#FF4F00',
+                            cursor: 'pointer',
+                            onClick: handleDotClick(metric, category, chartData),
+                          }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+
+                    {/* InlineInput overlay positioned within the chart area */}
+                    {inlineEdit && inlineEdit.metric === metric && inlineEdit.category === category && (
+                      <InlineInput
+                        date={inlineEdit.date}
+                        metric={inlineEdit.metric}
+                        category={inlineEdit.category}
+                        existingValue={inlineEdit.existingValue}
+                        position={inlineEdit.position}
+                        onSave={handleSave}
+                        onDismiss={handleDismiss}
                       />
-                      <YAxis stroke="#6b7280" tick={{ fontSize: 9, fill: '#6b7280' }} width={30} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#242430',
-                          border: '1px solid #2e2e3a',
-                          borderRadius: '8px',
-                          fontSize: '11px',
-                        }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="value"
-                        stroke="#9ca3af"
-                        strokeWidth={1.5}
-                        dot={{ fill: '#9ca3af', r: 2 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+                    )}
+                  </div>
                 )}
 
                 {/* Recent values table */}

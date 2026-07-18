@@ -52,38 +52,11 @@ class LogResponse(BaseModel):
 
 # Schedule models
 
-class ScheduleConfigUpdate(BaseModel):
-    cycle_start_date: str  # ISO 8601 date, validated in endpoint
-
-
-class ScheduleConfigResponse(BaseModel):
-    cycle_start_date: Optional[str]
-    split_cycle: list[dict]  # [{day_index: int, day_type: str}]
-
-
 class ScheduleTodayResponse(BaseModel):
     date: str
     day_type: Optional[str]
     day_index: Optional[int]
     configured: bool
-
-
-class WeekDayResponse(BaseModel):
-    date: str
-    day_index: int
-    day_type: str
-
-
-# Shift models
-
-class ShiftRequest(BaseModel):
-    unavailable_date: str  # ISO 8601, must be future
-
-
-class ShiftResponse(BaseModel):
-    new_cycle_start_date: str
-    week_schedule: list[WeekDayResponse]
-    absorbed_rest: bool
 
 
 # Gym exercise input model
@@ -95,12 +68,47 @@ class GymExerciseInput(BaseModel):
     sets: int = Field(ge=1, le=50)
 
 
-# Natural-language parse models
+# Subtask models
 
-class NLParseRequest(BaseModel):
-    text: str = Field(max_length=2000)
+class SubtaskCreate(BaseModel):
+    description: str = Field(min_length=1, max_length=300)
+    parent_subtask_id: Optional[int] = None
 
 
-class NLParseResponse(BaseModel):
-    entries: list[dict]  # [{category, metric, value, notes, date}]
-    errors: list[str]
+class SubtaskUpdate(BaseModel):
+    description: Optional[str] = Field(None, min_length=1, max_length=300)
+    done: Optional[bool] = None
+    sort_order: Optional[int] = None
+
+
+class SubtaskResponse(BaseModel):
+    id: int
+    thread_id: int
+    parent_subtask_id: Optional[int]
+    description: str
+    done: bool
+    sort_order: int
+
+
+class SubtaskReorderItem(BaseModel):
+    id: int
+    sort_order: int
+
+
+class SubtaskReorderRequest(BaseModel):
+    items: list[SubtaskReorderItem]
+
+
+# Gym exercise seed models
+
+class ExerciseDefinition(BaseModel):
+    name: str
+    swap: Optional[str] = None
+
+
+class SplitDayExercises(BaseModel):
+    day_type: str
+    exercises: list[ExerciseDefinition]
+
+
+

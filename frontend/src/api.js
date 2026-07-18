@@ -43,16 +43,34 @@ export const updateLog = (id, data) =>
 export const deleteLog = (id) =>
   request(`/logs/${id}`, { method: 'DELETE' });
 
-// Natural Language
-export const parseNaturalLanguage = (data) =>
-  request('/nl/parse', { method: 'POST', body: JSON.stringify(data) });
+// Subtasks
+export const getSubtasks = (threadId) => request(`/threads/${threadId}/subtasks`);
+export const createSubtask = (threadId, data) =>
+  request(`/threads/${threadId}/subtasks`, { method: 'POST', body: JSON.stringify(data) });
+export const updateSubtask = (subtaskId, data) =>
+  request(`/subtasks/${subtaskId}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deleteSubtask = (subtaskId) =>
+  request(`/subtasks/${subtaskId}`, { method: 'DELETE' });
+export const reorderSubtasks = (threadId, data) =>
+  request(`/threads/${threadId}/subtasks/reorder`, { method: 'PUT', body: JSON.stringify(data) });
+
+// Upsert log (create if no entry exists for date+metric+category, update if it does)
+export async function upsertLog({ date, metric, category, value }) {
+  // Check if an entry already exists for this date, metric, and category
+  const existing = await getLogs({ category, metric, date_from: date, date_to: date });
+  const match = existing.find(
+    (log) => log.date === date && log.metric === metric && log.category === category
+  );
+  if (match) {
+    return updateLog(match.id, { value });
+  } else {
+    return createLog({ date, category, metric, value });
+  }
+}
 
 // Schedule
 export const getTodaySchedule = () => request('/schedule/today');
-export const getWeekSchedule = (startDate) =>
-  request(`/schedule/week${startDate ? `?start_date=${startDate}` : ''}`);
-export const getScheduleConfig = () => request('/schedule/config');
-export const updateScheduleConfig = (data) =>
-  request('/schedule/config', { method: 'PUT', body: JSON.stringify(data) });
-export const shiftSchedule = (data) =>
-  request('/schedule/shift', { method: 'POST', body: JSON.stringify(data) });
+
+// Gym
+export const getGymExercises = (dayType) => request(`/gym/exercises${dayType ? `/${dayType}` : ''}`);
+export const getGymHistory = (exerciseName, range = '3m') => request(`/gym/history/${encodeURIComponent(exerciseName)}?range=${range}`);

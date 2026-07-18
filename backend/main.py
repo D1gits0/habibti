@@ -3,18 +3,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from datetime import datetime, date, timedelta
 import os
+import json
 
 from database import init_db, get_db
 from models import (
     ThreadCreate, ThreadUpdate, ThreadResponse,
     LogCreate, LogUpdate, LogResponse,
-    ScheduleConfigUpdate, ScheduleConfigResponse, ScheduleTodayResponse,
-    WeekDayResponse, ShiftRequest, ShiftResponse,
-    NLParseRequest, NLParseResponse,
+    ScheduleTodayResponse,
+    SubtaskCreate, SubtaskUpdate, SubtaskResponse, SubtaskReorderRequest,
+    ExerciseDefinition, SplitDayExercises,
 )
-from schedule_engine import get_day_type, get_day_index, get_week_schedule, SPLIT_CYCLE
-from shift_engine import compute_shift, validate_shift_request
-from nl_parser import NLParserService
+from schedule_engine import get_day_type, get_day_index, SPLIT_CYCLE
+from subtask_utils import compute_completion_percentage
+
+# Load exercise seed data
+_SEED_PATH = os.path.join(os.path.dirname(__file__), "exercise_seed.json")
+with open(_SEED_PATH, "r") as f:
+    EXERCISE_SEED: dict = json.load(f)
+
 
 # Force fresh deploy
 app = FastAPI(title="Compound API")
@@ -215,122 +221,202 @@ def get_today_schedule():
     }
 
 
-@app.get("/api/schedule/week")
-def get_week_schedule_endpoint(start_date: Optional[str] = None):
-    """Returns next 7 days with day_type for each. Uses today if start_date not provided."""
-    with get_db() as conn:
-        row = conn.execute("SELECT cycle_start_date FROM schedule_state WHERE id = 1").fetchone()
-        cycle_start = row["cycle_start_date"] if row else None
+# ─── GYM ─────────────────────────────────────────────────────────────────────────
 
-    if not cycle_start:
-        return {"configured": False, "days": []}
-
-    cycle_start_date = date.fromisoformat(cycle_start)
-    start = date.fromisoformat(start_date) if start_date else date.today()
-    days = get_week_schedule(cycle_start_date, start)
-    return days
+@app.get("/api/gym/exercises", response_model=list[SplitDayExercises])
+def get_all_exercises():
+    """Return the full exercise seed data (all split days with primary/swap exercises)."""
+    return [
+        SplitDayExercises(day_type=day_type, exercises=[ExerciseDefinition(**ex) for ex in exercises])
+        for day_type, exercises in EXERCISE_SEED.items()
+    ]
 
 
-@app.get("/api/schedule/config")
-def get_schedule_config():
-    """Returns current schedule configuration."""
-    with get_db() as conn:
-        row = conn.execute("SELECT cycle_start_date FROM schedule_state WHERE id = 1").fetchone()
-        cycle_start = row["cycle_start_date"] if row else None
-        split_rows = conn.execute("SELECT day_index, day_type FROM split_schedule ORDER BY day_index").fetchall()
-
-    split_cycle = [{"day_index": r["day_index"], "day_type": r["day_type"]} for r in split_rows]
-    return {
-        "cycle_start_date": cycle_start,
-        "split_cycle": split_cycle,
-    }
+@app.get("/api/gym/exercises/{day_type}", response_model=SplitDayExercises)
+def get_exercises_for_day(day_type: str):
+    """Return exercises for a specific split day."""
+    if day_type not in EXERCISE_SEED:
+        raise HTTPException(status_code=404, detail=f"Day type '{day_type}' not found")
+    exercises = EXERCISE_SEED[day_type]
+    return SplitDayExercises(day_type=day_type, exercises=[ExerciseDefinition(**ex) for ex in exercises])
 
 
-@app.put("/api/schedule/config")
-def update_schedule_config(body: ScheduleConfigUpdate):
-    """Update cycle_start_date. Validates date range (±30 days from today)."""
-    try:
-        new_date = date.fromisoformat(body.cycle_start_date)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="Invalid date format")
-
+@app.get("/api/gym/history/{exercise_name}")
+def get_exercise_history(
+    exercise_name: str,
+    range: str = Query("3m", pattern="^(1m|3m|6m|ytd)$"),
+):
+    """Return logged entries for a specific exercise with time range filter."""
     today = date.today()
-    if abs((new_date - today).days) > 30:
-        raise HTTPException(status_code=422, detail="Date must be within 30 days of today")
+
+    if range == "1m":
+        start_date = today - timedelta(days=30)
+    elif range == "3m":
+        start_date = today - timedelta(days=90)
+    elif range == "6m":
+        start_date = today - timedelta(days=180)
+    elif range == "ytd":
+        start_date = date(today.year, 1, 1)
+    else:
+        start_date = today - timedelta(days=90)
 
     with get_db() as conn:
-        conn.execute(
-            "UPDATE schedule_state SET cycle_start_date = ? WHERE id = 1",
-            (new_date.isoformat(),),
-        )
+        rows = conn.execute(
+            "SELECT id, date, category, metric, value, notes FROM logs "
+            "WHERE category = 'gym' AND metric = ? AND date >= ? "
+            "ORDER BY date ASC, id ASC",
+            (exercise_name, start_date.isoformat()),
+        ).fetchall()
+        return [dict(row) for row in rows]
 
-    return {"cycle_start_date": new_date.isoformat()}
 
 
-@app.post("/api/schedule/shift")
-def shift_schedule(body: ShiftRequest):
-    """Mark a day unavailable, shift schedule forward. Validates future date."""
-    try:
-        unavailable = date.fromisoformat(body.unavailable_date)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="Invalid date format")
 
-    today = date.today()
-    error = validate_shift_request(unavailable, today)
-    if error:
-        raise HTTPException(status_code=422, detail=error)
+# ─── SUBTASKS ────────────────────────────────────────────────────────────────────
 
+@app.get("/api/threads/{thread_id}/subtasks")
+def list_subtasks(thread_id: int):
     with get_db() as conn:
-        row = conn.execute("SELECT cycle_start_date FROM schedule_state WHERE id = 1").fetchone()
-        cycle_start = row["cycle_start_date"] if row else None
+        # Verify thread exists
+        thread = conn.execute("SELECT id FROM threads WHERE id = ?", (thread_id,)).fetchone()
+        if not thread:
+            raise HTTPException(status_code=404, detail="Project not found")
+        rows = conn.execute(
+            "SELECT id, thread_id, parent_subtask_id, description, done, sort_order FROM subtasks WHERE thread_id = ? ORDER BY sort_order",
+            (thread_id,),
+        ).fetchall()
+        subtasks = [
+            {**dict(row), "done": bool(row["done"])}
+            for row in rows
+        ]
+        completion_percentage = compute_completion_percentage(subtasks)
+        return {
+            "subtasks": subtasks,
+            "completion_percentage": completion_percentage,
+        }
 
-    if not cycle_start:
-        raise HTTPException(status_code=422, detail="Schedule not configured")
 
-    cycle_start_date = date.fromisoformat(cycle_start)
-    new_cycle_start = compute_shift(cycle_start_date, unavailable, SPLIT_CYCLE)
-
-    # Check if a rest day exists in the remaining cycle after the unavailable date
-    idx = (unavailable - cycle_start_date).days % 7
-    remaining_indices = list(range(idx + 1, 7))
-    absorbed_rest = any(SPLIT_CYCLE[i] == "Rest" for i in remaining_indices)
-
-    # Persist the new cycle_start_date
+@app.post("/api/threads/{thread_id}/subtasks", response_model=SubtaskResponse, status_code=201)
+def create_subtask(thread_id: int, subtask: SubtaskCreate):
     with get_db() as conn:
-        conn.execute(
-            "UPDATE schedule_state SET cycle_start_date = ? WHERE id = 1",
-            (new_cycle_start.isoformat(),),
+        # Verify thread exists
+        thread = conn.execute("SELECT id FROM threads WHERE id = ?", (thread_id,)).fetchone()
+        if not thread:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Validate description (non-whitespace content, 1-300 chars)
+        stripped = subtask.description.strip()
+        if len(stripped) == 0 or len(subtask.description) > 300:
+            raise HTTPException(status_code=422, detail="Description must be 1-300 non-whitespace characters")
+
+        # Count validation: max 50 subtasks per project
+        count = conn.execute(
+            "SELECT COUNT(*) FROM subtasks WHERE thread_id = ?", (thread_id,)
+        ).fetchone()[0]
+        if count >= 50:
+            raise HTTPException(status_code=422, detail="Maximum of 50 subtasks per project reached")
+
+        # Nesting depth validation: max depth 2
+        if subtask.parent_subtask_id is not None:
+            # Verify parent exists and belongs to this thread
+            parent = conn.execute(
+                "SELECT id, parent_subtask_id, thread_id FROM subtasks WHERE id = ?",
+                (subtask.parent_subtask_id,),
+            ).fetchone()
+            if not parent or parent["thread_id"] != thread_id:
+                raise HTTPException(status_code=404, detail="Subtask not found")
+            # If parent already has a parent, we'd be at depth 3 — reject
+            if parent["parent_subtask_id"] is not None:
+                raise HTTPException(status_code=422, detail="Maximum nesting depth of 2 levels reached")
+
+        # Determine next sort_order within parent scope
+        if subtask.parent_subtask_id is not None:
+            max_sort = conn.execute(
+                "SELECT MAX(sort_order) FROM subtasks WHERE thread_id = ? AND parent_subtask_id = ?",
+                (thread_id, subtask.parent_subtask_id),
+            ).fetchone()[0]
+        else:
+            max_sort = conn.execute(
+                "SELECT MAX(sort_order) FROM subtasks WHERE thread_id = ? AND parent_subtask_id IS NULL",
+                (thread_id,),
+            ).fetchone()[0]
+
+        next_sort = (max_sort + 1) if max_sort is not None else 0
+
+        cursor = conn.execute(
+            "INSERT INTO subtasks (thread_id, parent_subtask_id, description, done, sort_order) VALUES (?, ?, ?, 0, ?)",
+            (thread_id, subtask.parent_subtask_id, subtask.description, next_sort),
         )
-
-    # Return updated week schedule starting from today
-    week = get_week_schedule(new_cycle_start, today)
-    return {
-        "new_cycle_start_date": new_cycle_start.isoformat(),
-        "week_schedule": week,
-        "absorbed_rest": absorbed_rest,
-    }
+        row = conn.execute(
+            "SELECT id, thread_id, parent_subtask_id, description, done, sort_order FROM subtasks WHERE id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
+        return {**dict(row), "done": bool(row["done"])}
 
 
+@app.put("/api/subtasks/{subtask_id}", response_model=SubtaskResponse)
+def update_subtask(subtask_id: int, subtask: SubtaskUpdate):
+    with get_db() as conn:
+        existing = conn.execute(
+            "SELECT id, thread_id, parent_subtask_id, description, done, sort_order FROM subtasks WHERE id = ?",
+            (subtask_id,),
+        ).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Subtask not found")
 
-# ─── NATURAL LANGUAGE PARSE ──────────────────────────────────────────────────────
+        updates = {}
+        if subtask.description is not None:
+            stripped = subtask.description.strip()
+            if len(stripped) == 0 or len(subtask.description) > 300:
+                raise HTTPException(status_code=422, detail="Description must be 1-300 non-whitespace characters")
+            updates["description"] = subtask.description
+        if subtask.done is not None:
+            updates["done"] = 1 if subtask.done else 0
+        if subtask.sort_order is not None:
+            updates["sort_order"] = subtask.sort_order
 
-@app.post("/api/nl/parse", response_model=NLParseResponse)
-async def parse_natural_language(body: NLParseRequest):
-    """Parse free-text, return structured entries for confirmation."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
+        if updates:
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
+            conn.execute(
+                f"UPDATE subtasks SET {set_clause} WHERE id = ?",
+                list(updates.values()) + [subtask_id],
+            )
 
-    service = NLParserService(api_key=api_key)
+        row = conn.execute(
+            "SELECT id, thread_id, parent_subtask_id, description, done, sort_order FROM subtasks WHERE id = ?",
+            (subtask_id,),
+        ).fetchone()
+        return {**dict(row), "done": bool(row["done"])}
 
-    try:
-        result = await service.parse_input(body.text, date.today().isoformat())
-    except TimeoutError:
-        raise HTTPException(status_code=504, detail="Claude API timed out. Please retry.")
-    except ValueError as e:
-        raise HTTPException(
-            status_code=422,
-            detail="Could not parse input into valid entries",
-        )
 
-    return result
+@app.delete("/api/subtasks/{subtask_id}", status_code=204)
+def delete_subtask(subtask_id: int):
+    with get_db() as conn:
+        existing = conn.execute("SELECT id FROM subtasks WHERE id = ?", (subtask_id,)).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Subtask not found")
+        # ON DELETE CASCADE handles children removal
+        conn.execute("DELETE FROM subtasks WHERE id = ?", (subtask_id,))
+
+
+@app.put("/api/threads/{thread_id}/subtasks/reorder")
+def reorder_subtasks(thread_id: int, request: SubtaskReorderRequest):
+    with get_db() as conn:
+        # Verify thread exists
+        thread = conn.execute("SELECT id FROM threads WHERE id = ?", (thread_id,)).fetchone()
+        if not thread:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        for item in request.items:
+            # Verify subtask belongs to this thread
+            subtask = conn.execute(
+                "SELECT id FROM subtasks WHERE id = ? AND thread_id = ?",
+                (item.id, thread_id),
+            ).fetchone()
+            if not subtask:
+                raise HTTPException(status_code=404, detail="Subtask not found")
+            conn.execute(
+                "UPDATE subtasks SET sort_order = ? WHERE id = ?",
+                (item.sort_order, item.id),
+            )
+        return {"status": "ok"}

@@ -15,7 +15,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from schedule_engine import get_day_type, get_day_index, get_week_schedule, SPLIT_CYCLE
+from schedule_engine import get_day_type, get_day_index, SPLIT_CYCLE
 
 
 # --- Strategies ---
@@ -48,17 +48,6 @@ def test_property_6_day_type_modulo(cycle_start, query):
 
 @settings(max_examples=100)
 @given(cycle_start=dates_strategy)
-def test_get_week_schedule_returns_exactly_7_items(cycle_start):
-    """get_week_schedule always returns exactly 7 items.
-
-    **Validates: Requirements 4.3**
-    """
-    result = get_week_schedule(cycle_start, cycle_start)
-    assert len(result) == 7
-
-
-@settings(max_examples=100)
-@given(cycle_start=dates_strategy)
 def test_same_day_query_returns_day_index_0(cycle_start):
     """When query_date equals cycle_start_date, day_index is 0.
 
@@ -78,3 +67,28 @@ def test_consecutive_days_have_consecutive_indices(cycle_start, query):
     idx_today = get_day_index(cycle_start, query)
     idx_tomorrow = get_day_index(cycle_start, query + timedelta(days=1))
     assert idx_tomorrow == (idx_today + 1) % 7
+
+
+# --- Feature: compound-v3, Property 1: Split cycle day type computation ---
+
+
+@settings(max_examples=100)
+@given(
+    cycle_start=dates_strategy,
+    days_offset=st.integers(min_value=0, max_value=365),
+)
+def test_property_1_split_cycle_day_type_computation(cycle_start, days_offset):
+    """Property 1: Split cycle day type computation.
+
+    For any valid cycle_start_date and query_date (where query_date >= cycle_start_date),
+    get_day_type(cycle_start_date, query_date) SHALL return
+    SPLIT_CYCLE[(query_date - cycle_start_date).days % 7].
+
+    Feature: compound-v3, Property 1: Split cycle day type computation
+    **Validates: Requirements 2.5**
+    """
+    query_date = cycle_start + timedelta(days=days_offset)
+    expected_index = (query_date - cycle_start).days % 7
+    expected_day_type = SPLIT_CYCLE[expected_index]
+    actual_day_type = get_day_type(cycle_start, query_date)
+    assert actual_day_type == expected_day_type

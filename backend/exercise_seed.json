@@ -1,0 +1,44 @@
+{
+  "Push": [
+    { "name": "Incline DB Press", "swap": null },
+    { "name": "Cable Chest Fly", "swap": "Pec Deck" },
+    { "name": "Machine Shoulder Press", "swap": null },
+    { "name": "Lateral Raises", "swap": null },
+    { "name": "Overhead Tricep Extension", "swap": null }
+  ],
+  "Pull": [
+    { "name": "Lat Pulldowns", "swap": null },
+    { "name": "Close Grip Cable Rows", "swap": null },
+    { "name": "Reverse Fly", "swap": "Archer Pull" },
+    { "name": "Preacher Curls", "swap": null },
+    { "name": "Cable Hammer Curls", "swap": "DB Hammer Curl" }
+  ],
+  "Legs": [
+    { "name": "Bulgarian Split Squat", "swap": null },
+    { "name": "45 Degree Back Extension", "swap": null },
+    { "name": "Leg Extensions", "swap": null },
+    { "name": "Leg Curls", "swap": null },
+    { "name": "Calf Raises", "swap": null }
+  ],
+  "Upper": [
+    { "name": "Weighted Dips", "swap": null },
+    { "name": "Cable Chest Fly", "swap": "Pec Deck" },
+    { "name": "Pull Ups", "swap": null },
+    { "name": "Wide Grip Cable Rows", "swap": null },
+    { "name": "Lateral Raises", "swap": null },
+    { "name": "Incline Curls", "swap": null },
+    { "name": "Overhead Tricep Extension", "swap": null }
+  ],
+  "Lower": [
+    { "name": "Bulgarian Split Squat", "swap": null },
+    { "name": "45 Degree Back Extension", "swap": null },
+    { "name": "Leg Extensions", "swap": null },
+    { "name": "Leg Curls", "swap": null },
+    { "name": "Calf Raises", "swap": null }
+  ],
+  "Rest": [],
+  "Abs": [
+    { "name": "Cable Crunches", "swap": null },
+    { "name": "Leg Raises", "swap": "Side Planks" }
+  ]
+}
