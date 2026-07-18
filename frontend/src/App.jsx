@@ -2,10 +2,12 @@ import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-do
 import ProjectsBoard from './pages/ProjectsBoard'
 import GymPage from './pages/GymPage'
 import HabitView from './pages/HabitView'
+import CalendarPage from './pages/CalendarPage'
 import Settings from './pages/Settings'
 
 const navItems = [
   { to: '/', label: 'Projects' },
+  { to: '/calendar', label: 'Calendar' },
   { to: '/habits', label: 'Habits' },
   { to: '/gym', label: 'Gym' },
   { to: '/settings', label: 'Settings' },
@@ -18,6 +20,7 @@ export default function App() {
         <main className="flex-1 pb-20 md:pb-4 px-3 md:px-6 pt-4">
           <Routes>
             <Route path="/" element={<ProjectsBoard />} />
+            <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/log" element={<Navigate to="/habits" replace />} />
             <Route path="/gym" element={<GymPage />} />
             <Route path="/habits" element={<HabitView />} />

@@ -74,3 +74,19 @@ export const getTodaySchedule = () => request('/schedule/today');
 // Gym
 export const getGymExercises = (dayType) => request(`/gym/exercises${dayType ? `/${dayType}` : ''}`);
 export const getGymHistory = (exerciseName, range = '3m') => request(`/gym/history/${encodeURIComponent(exerciseName)}?range=${range}`);
+
+// Deadlines
+export const getDeadlines = (params = {}) => {
+  const qs = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v))).toString();
+  return request(`/deadlines${qs ? `?${qs}` : ''}`);
+};
+export const createDeadline = (data) =>
+  request('/deadlines', { method: 'POST', body: JSON.stringify(data) });
+export const updateDeadline = (id, data) =>
+  request(`/deadlines/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deleteDeadline = (id) =>
+  request(`/deadlines/${id}`, { method: 'DELETE' });
+
+// Calendar
+export const getCalendarEvents = (dateFrom, dateTo) =>
+  request(`/calendar/events?date_from=${dateFrom}&date_to=${dateTo}`);

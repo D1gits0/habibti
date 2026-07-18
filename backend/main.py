@@ -12,6 +12,7 @@ from models import (
     ScheduleTodayResponse,
     SubtaskCreate, SubtaskUpdate, SubtaskResponse, SubtaskReorderRequest,
     ExerciseDefinition, SplitDayExercises,
+    DeadlineCreate, DeadlineUpdate, DeadlineResponse,
 )
 from schedule_engine import get_day_type, get_day_index, SPLIT_CYCLE
 from subtask_utils import compute_completion_percentage
@@ -374,6 +375,8 @@ def update_subtask(subtask_id: int, subtask: SubtaskUpdate):
             updates["done"] = 1 if subtask.done else 0
         if subtask.sort_order is not None:
             updates["sort_order"] = subtask.sort_order
+        if subtask.due_date is not None:
+            updates["due_date"] = subtask.due_date
 
         if updates:
             set_clause = ", ".join(f"{k} = ?" for k in updates)
@@ -420,3 +423,141 @@ def reorder_subtasks(thread_id: int, request: SubtaskReorderRequest):
                 (item.sort_order, item.id),
             )
         return {"status": "ok"}
+
+
+# ─── DEADLINES ───────────────────────────────────────────────────────────────────
+
+@app.get("/api/deadlines", response_model=list[DeadlineResponse])
+def list_deadlines(
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    project_id: Optional[int] = Query(None),
+):
+    """List deadlines with optional date range and project filters."""
+    with get_db() as conn:
+        query = "SELECT id, title, due_date, source, project_id, created_at FROM deadlines WHERE 1=1"
+        params = []
+        if date_from:
+            query += " AND due_date >= ?"
+            params.append(date_from)
+        if date_to:
+            query += " AND due_date <= ?"
+            params.append(date_to)
+        if project_id is not None:
+            query += " AND project_id = ?"
+            params.append(project_id)
+        query += " ORDER BY due_date ASC, id ASC"
+        rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+
+@app.post("/api/deadlines", response_model=DeadlineResponse, status_code=201)
+def create_deadline(deadline: DeadlineCreate):
+    """Create a new deadline."""
+    with get_db() as conn:
+        # Validate project_id if provided
+        if deadline.project_id is not None:
+            project = conn.execute("SELECT id FROM threads WHERE id = ?", (deadline.project_id,)).fetchone()
+            if not project:
+                raise HTTPException(status_code=404, detail="Project not found")
+
+        cursor = conn.execute(
+            "INSERT INTO deadlines (title, due_date, source, project_id) VALUES (?, ?, ?, ?)",
+            (deadline.title, deadline.due_date, deadline.source, deadline.project_id),
+        )
+        row = conn.execute(
+            "SELECT id, title, due_date, source, project_id, created_at FROM deadlines WHERE id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
+        return dict(row)
+
+
+@app.put("/api/deadlines/{deadline_id}", response_model=DeadlineResponse)
+def update_deadline(deadline_id: int, deadline: DeadlineUpdate):
+    """Update an existing deadline."""
+    with get_db() as conn:
+        existing = conn.execute("SELECT id FROM deadlines WHERE id = ?", (deadline_id,)).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Deadline not found")
+
+        updates = {}
+        if deadline.title is not None:
+            updates["title"] = deadline.title
+        if deadline.due_date is not None:
+            updates["due_date"] = deadline.due_date
+        if deadline.project_id is not None:
+            updates["project_id"] = deadline.project_id
+
+        if updates:
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
+            conn.execute(
+                f"UPDATE deadlines SET {set_clause} WHERE id = ?",
+                list(updates.values()) + [deadline_id],
+            )
+
+        row = conn.execute(
+            "SELECT id, title, due_date, source, project_id, created_at FROM deadlines WHERE id = ?",
+            (deadline_id,),
+        ).fetchone()
+        return dict(row)
+
+
+@app.delete("/api/deadlines/{deadline_id}", status_code=204)
+def delete_deadline(deadline_id: int):
+    """Delete a deadline."""
+    with get_db() as conn:
+        existing = conn.execute("SELECT id FROM deadlines WHERE id = ?", (deadline_id,)).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Deadline not found")
+        conn.execute("DELETE FROM deadlines WHERE id = ?", (deadline_id,))
+
+
+@app.get("/api/calendar/events")
+def get_calendar_events(
+    date_from: str = Query(...),
+    date_to: str = Query(...),
+):
+    """Get all calendar events (deadlines + subtasks with due_dates) for a date range."""
+    with get_db() as conn:
+        events = []
+
+        # Get deadlines in range
+        deadline_rows = conn.execute(
+            "SELECT d.id, d.title, d.due_date, d.source, d.project_id, t.name as project_name "
+            "FROM deadlines d LEFT JOIN threads t ON d.project_id = t.id "
+            "WHERE d.due_date >= ? AND d.due_date <= ? "
+            "ORDER BY d.due_date ASC",
+            (date_from, date_to),
+        ).fetchall()
+        for row in deadline_rows:
+            events.append({
+                "id": f"deadline-{row['id']}",
+                "title": row["title"],
+                "due_date": row["due_date"],
+                "source": row["source"],
+                "type": "deadline",
+                "project_id": row["project_id"],
+                "project_name": row["project_name"],
+            })
+
+        # Get subtasks with due_dates in range
+        subtask_rows = conn.execute(
+            "SELECT s.id, s.description, s.due_date, s.thread_id, s.done, t.name as project_name "
+            "FROM subtasks s JOIN threads t ON s.thread_id = t.id "
+            "WHERE s.due_date IS NOT NULL AND s.due_date >= ? AND s.due_date <= ? "
+            "ORDER BY s.due_date ASC",
+            (date_from, date_to),
+        ).fetchall()
+        for row in subtask_rows:
+            events.append({
+                "id": f"subtask-{row['id']}",
+                "title": row["description"],
+                "due_date": row["due_date"],
+                "source": "project",
+                "type": "subtask",
+                "project_id": row["thread_id"],
+                "project_name": row["project_name"],
+                "done": bool(row["done"]),
+            })
+
+        return events

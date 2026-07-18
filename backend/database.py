@@ -84,5 +84,28 @@ def init_db():
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_subtasks_parent ON subtasks(parent_subtask_id)
         """)
+        # Add due_date column to subtasks if not present
+        try:
+            conn.execute("ALTER TABLE subtasks ADD COLUMN due_date TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+        # Deadlines table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS deadlines (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                due_date TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'personal' CHECK(source IN ('personal', 'canvas')),
+                project_id INTEGER REFERENCES threads(id) ON DELETE SET NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_deadlines_due_date ON deadlines(due_date)
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_deadlines_project ON deadlines(project_id)
+        """)
         # Ensure schedule_state single-row exists
         conn.execute("INSERT OR IGNORE INTO schedule_state (id, cycle_start_date) VALUES (1, NULL)")

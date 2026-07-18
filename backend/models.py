@@ -79,6 +79,7 @@ class SubtaskUpdate(BaseModel):
     description: Optional[str] = Field(None, min_length=1, max_length=300)
     done: Optional[bool] = None
     sort_order: Optional[int] = None
+    due_date: Optional[str] = None
 
 
 class SubtaskResponse(BaseModel):
@@ -88,6 +89,7 @@ class SubtaskResponse(BaseModel):
     description: str
     done: bool
     sort_order: int
+    due_date: Optional[str] = None
 
 
 class SubtaskReorderItem(BaseModel):
@@ -112,3 +114,26 @@ class SplitDayExercises(BaseModel):
 
 
 
+
+# Deadline models
+
+class DeadlineCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    due_date: str
+    source: str = "personal"
+    project_id: Optional[int] = None
+
+
+class DeadlineUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    due_date: Optional[str] = None
+    project_id: Optional[int] = None
+
+
+class DeadlineResponse(BaseModel):
+    id: int
+    title: str
+    due_date: str
+    source: str
+    project_id: Optional[int]
+    created_at: str
