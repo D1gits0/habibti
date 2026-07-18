@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getGymExercises, createLog, getLogs, getGymHistory, upsertLog } from '../api'
+import { getGymExercises, createLog, getLogs, getGymHistory, upsertLog, updateLog, deleteLog } from '../api'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import SwapPicker from '../components/SwapPicker'
 import OverloadChart from '../components/OverloadChart'
@@ -13,7 +13,8 @@ const MUSCLE_GROUPS = {
   Chest: ['Incline DB Press', 'Cable Chest Fly', 'Pec Deck', 'Weighted Dips'],
   Back: ['Lat Pulldowns', 'Close Grip Cable Rows', 'Wide Grip Cable Rows', 'Pull Ups', 'Reverse Fly', 'Archer Pull'],
   Shoulders: ['Machine Shoulder Press', 'Lateral Raises'],
-  Arms: ['Overhead Tricep Extension', 'Preacher Curls', 'Cable Hammer Curls', 'DB Hammer Curl', 'Incline Curls'],
+  Biceps: ['Preacher Curls', 'Cable Hammer Curls', 'DB Hammer Curl', 'Incline Curls'],
+  Triceps: ['Overhead Tricep Extension'],
   Legs: ['Bulgarian Split Squat', '45 Degree Back Extension', 'Leg Extensions', 'Leg Curls', 'Calf Raises'],
   Abs: ['Cable Crunches', 'Leg Raises', 'Side Planks'],
 }
@@ -98,6 +99,11 @@ export default function GymPage() {
   const [historyTimeRange, setHistoryTimeRange] = useState('3m')
   const [historyData, setHistoryData] = useState({}) // { exerciseName: [entries] }
   const [historyLoading, setHistoryLoading] = useState(false)
+
+  // Recent gym entries for edit/delete
+  const [recentGymLogs, setRecentGymLogs] = useState([])
+  const [editingLogId, setEditingLogId] = useState(null) // log id being edited
+  const [editForm, setEditForm] = useState({ weight: '', reps: '', flag: 'none' })
 
   useEffect(() => {
     if (!selectedSplit || selectedSplit === 'Rest') return
@@ -247,6 +253,65 @@ export default function GymPage() {
     }
     loadGroupHistory()
   }, [historySelectedGroup, historyTimeRange, historyMetrics])
+
+  // Load recent gym entries (last 7 days) for edit/delete
+  useEffect(() => {
+    loadRecentGymLogs()
+  }, [])
+
+  async function loadRecentGymLogs() {
+    try {
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+      const data = await getLogs({ category: 'gym', date_from: sevenDaysAgo.toISOString().split('T')[0] })
+      setRecentGymLogs(data.sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id))
+    } catch {
+      setRecentGymLogs([])
+    }
+  }
+
+  function parseNotesForEdit(notes) {
+    if (!notes) return { reps: '', flag: 'none' }
+    let flag = 'none'
+    let repsStr = notes
+    if (notes.includes('|')) {
+      const [flagPart, repsPart] = notes.split('|', 2)
+      repsStr = repsPart
+      if (flagPart === 'failure:true') flag = 'failure'
+      else if (flagPart === 'dropset:true') flag = 'dropset'
+    }
+    const match = repsStr.match(/(\d+)r/)
+    return { reps: match ? match[1] : '', flag }
+  }
+
+  function handleEditEntry(log) {
+    const { reps, flag } = parseNotesForEdit(log.notes)
+    setEditingLogId(log.id)
+    setEditForm({ weight: String(log.value), reps, flag })
+  }
+
+  async function handleSaveEdit(logId) {
+    const weightNum = parseFloat(editForm.weight)
+    const repsNum = parseInt(editForm.reps, 10)
+    if (isNaN(weightNum) || isNaN(repsNum)) return
+
+    let notes = `${repsNum}r`
+    if (editForm.flag === 'failure') notes = `failure:true|${repsNum}r`
+    else if (editForm.flag === 'dropset') notes = `dropset:true|${repsNum}r`
+
+    try {
+      await updateLog(logId, { value: weightNum, notes })
+      setEditingLogId(null)
+      await loadRecentGymLogs()
+    } catch { /* silently fail */ }
+  }
+
+  async function handleDeleteEntry(logId) {
+    try {
+      await deleteLog(logId)
+      await loadRecentGymLogs()
+    } catch { /* silently fail */ }
+  }
 
   // Handle chart dot click to open InlineInput
   const handleChartDotClick = useCallback((exerciseName) => (dotData) => {
@@ -1081,6 +1146,108 @@ export default function GymPage() {
                 </ResponsiveContainer>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Recent Gym Entries — edit/delete past entries */}
+      {recentGymLogs.length > 0 && (
+        <div className="mt-6" data-testid="recent-gym-entries">
+          <h2 className="font-body text-text-primary text-xs mb-3">RECENT ENTRIES</h2>
+          <div className="panel p-3">
+            <div className="flex flex-col gap-1">
+              {recentGymLogs.map((log) => {
+                const isEditing = editingLogId === log.id
+                const { reps, flag } = parseNotesForEdit(log.notes)
+
+                return (
+                  <div key={log.id} className="border-b border-charcoal-lighter/30 py-2 last:border-0">
+                    {isEditing ? (
+                      /* Edit form */
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-text-primary text-xs font-body w-28 truncate">{log.metric}</span>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={editForm.weight}
+                          onChange={(e) => setEditForm((f) => ({ ...f, weight: e.target.value }))}
+                          className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs text-text-primary w-16"
+                          placeholder="lbs"
+                        />
+                        <input
+                          type="number"
+                          step="1"
+                          value={editForm.reps}
+                          onChange={(e) => setEditForm((f) => ({ ...f, reps: e.target.value }))}
+                          className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs text-text-primary w-14"
+                          placeholder="reps"
+                        />
+                        <button
+                          onClick={() => setEditForm((f) => ({
+                            ...f,
+                            flag: f.flag === 'none' ? 'failure' : f.flag === 'failure' ? 'dropset' : 'none'
+                          }))}
+                          className={`px-1.5 py-0.5 text-[9px] rounded border ${
+                            editForm.flag === 'failure' ? 'border-red-500 text-red-400'
+                            : editForm.flag === 'dropset' ? 'border-yellow-500 text-yellow-400'
+                            : 'border-charcoal-lighter text-text-muted'
+                          }`}
+                        >
+                          {editForm.flag === 'failure' ? 'Fail' : editForm.flag === 'dropset' ? 'Drop' : '—'}
+                        </button>
+                        <button
+                          onClick={() => handleSaveEdit(log.id)}
+                          className="px-2 py-0.5 text-[10px] bg-charcoal-lighter text-text-primary rounded hover:bg-accent hover:text-white"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingLogId(null)}
+                          className="text-[10px] text-text-muted hover:text-text-secondary"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      /* Display row */
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span className="text-text-muted text-[10px] font-body w-16 shrink-0">{log.date.slice(5)}</span>
+                          <span className="text-text-primary text-xs font-body truncate">{log.metric}</span>
+                          <span className="text-text-secondary text-[10px] font-body shrink-0">
+                            {log.value}lbs
+                          </span>
+                          <span className="text-text-muted text-[10px] font-body shrink-0">
+                            {reps}r
+                            {flag !== 'none' && (
+                              <span className={flag === 'failure' ? 'text-red-400 ml-1' : 'text-yellow-400 ml-1'}>
+                                {flag === 'failure' ? '⚠' : '↓'}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <button
+                            onClick={() => handleEditEntry(log)}
+                            className="text-[10px] text-text-muted hover:text-accent transition-colors"
+                            title="Edit"
+                          >
+                            ✎
+                          </button>
+                          <button
+                            onClick={() => handleDeleteEntry(log.id)}
+                            className="text-[10px] text-text-muted hover:text-red-400 transition-colors"
+                            title="Delete"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       )}
