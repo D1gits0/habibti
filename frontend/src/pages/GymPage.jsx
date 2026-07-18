@@ -104,6 +104,7 @@ export default function GymPage() {
   const [recentGymLogs, setRecentGymLogs] = useState([])
   const [editingLogId, setEditingLogId] = useState(null) // log id being edited
   const [editForm, setEditForm] = useState({ weight: '', reps: '', flag: 'none' })
+  const [showRecentEntries, setShowRecentEntries] = useState(false)
 
   useEffect(() => {
     if (!selectedSplit || selectedSplit === 'Rest') return
@@ -1150,10 +1151,18 @@ export default function GymPage() {
         </div>
       )}
 
-      {/* Recent Gym Entries — edit/delete past entries */}
+      {/* Recent Gym Entries — collapsible */}
       {recentGymLogs.length > 0 && (
         <div className="mt-6" data-testid="recent-gym-entries">
-          <h2 className="font-body text-text-primary text-xs mb-3">RECENT ENTRIES</h2>
+          <button
+            onClick={() => setShowRecentEntries(!showRecentEntries)}
+            className="flex items-center gap-2 w-full text-left mb-2"
+          >
+            <span className="font-body text-text-primary text-xs">RECENT ENTRIES</span>
+            <span className="text-text-muted text-[10px] font-body">({recentGymLogs.length})</span>
+            <span className="text-text-muted text-xs ml-auto">{showRecentEntries ? '▾' : '▸'}</span>
+          </button>
+          {showRecentEntries && (
           <div className="panel p-3">
             <div className="flex flex-col gap-1">
               {recentGymLogs.map((log) => {
@@ -1249,6 +1258,7 @@ export default function GymPage() {
               })}
             </div>
           </div>
+          )}
         </div>
       )}
     </div>
