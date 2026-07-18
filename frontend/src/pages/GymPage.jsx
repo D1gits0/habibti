@@ -77,6 +77,13 @@ export default function GymPage() {
   // Inline edit state for chart-tap editing
   const [inlineEdit, setInlineEdit] = useState(null) // { exerciseName, date, weight, position }
 
+  // Exercise History viewer state
+  const [historyMetrics, setHistoryMetrics] = useState([]) // all gym exercise names from logs
+  const [historySelectedMetric, setHistorySelectedMetric] = useState('')
+  const [historyTimeRange, setHistoryTimeRange] = useState('3m')
+  const [historyData, setHistoryData] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+
   useEffect(() => {
     if (!selectedSplit || selectedSplit === 'Rest') return
 
@@ -179,6 +186,39 @@ export default function GymPage() {
   function handleOverloadTimeRangeChange(exerciseName, range) {
     fetchOverloadData(exerciseName, range)
   }
+
+  // Exercise History viewer — load all gym metric names on mount
+  useEffect(() => {
+    async function loadHistoryMetrics() {
+      try {
+        const gymLogs = await getLogs({ category: 'gym' })
+        const metrics = [...new Set(gymLogs.map((l) => l.metric))].sort()
+        setHistoryMetrics(metrics)
+        if (metrics.length > 0 && !historySelectedMetric) {
+          setHistorySelectedMetric(metrics[0])
+        }
+      } catch {
+        setHistoryMetrics([])
+      }
+    }
+    loadHistoryMetrics()
+  }, [])
+
+  // Load history data when selected metric or time range changes
+  useEffect(() => {
+    if (!historySelectedMetric) return
+    async function loadHistory() {
+      setHistoryLoading(true)
+      try {
+        const data = await getGymHistory(historySelectedMetric, historyTimeRange)
+        setHistoryData(data || [])
+      } catch {
+        setHistoryData([])
+      }
+      setHistoryLoading(false)
+    }
+    loadHistory()
+  }, [historySelectedMetric, historyTimeRange])
 
   // Handle chart dot click to open InlineInput
   const handleChartDotClick = useCallback((exerciseName) => (dotData) => {
@@ -912,6 +952,58 @@ export default function GymPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Exercise History Viewer — always accessible on the Gym page */}
+      {historyMetrics.length > 0 && (
+        <div className="mt-6" data-testid="exercise-history-section">
+          <h2 className="font-body text-text-primary text-xs mb-3">EXERCISE HISTORY</h2>
+          <div className="panel p-4">
+            {/* Exercise selector dropdown */}
+            <div className="flex items-center gap-3 mb-3">
+              <select
+                value={historySelectedMetric}
+                onChange={(e) => setHistorySelectedMetric(e.target.value)}
+                className="bg-charcoal border border-charcoal-lighter rounded px-3 py-1.5 text-xs text-text-primary font-body focus:outline-none focus:border-accent flex-1"
+              >
+                {historyMetrics.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Time range toggles — same options as habits */}
+            <div className="flex gap-1 mb-3">
+              {['1m', '3m', '6m', 'ytd'].map((range) => (
+                <button
+                  key={range}
+                  onClick={() => setHistoryTimeRange(range)}
+                  className={`px-2 py-0.5 text-[10px] font-body rounded transition-colors ${
+                    historyTimeRange === range
+                      ? 'bg-accent text-white'
+                      : 'bg-charcoal-lighter text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  {range === 'ytd' ? 'YTD' : range.toUpperCase()}
+                </button>
+              ))}
+            </div>
+
+            {/* Chart */}
+            {historyLoading ? (
+              <div className="h-[150px] flex items-center justify-center text-text-muted text-xs">
+                Loading...
+              </div>
+            ) : (
+              <OverloadChart
+                exerciseName={historySelectedMetric}
+                data={historyData}
+                timeRange={historyTimeRange}
+                onTimeRangeChange={(range) => setHistoryTimeRange(range)}
+              />
+            )}
+          </div>
         </div>
       )}
     </div>

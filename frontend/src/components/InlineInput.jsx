@@ -10,12 +10,14 @@ import { useState, useRef, useEffect, useCallback } from 'react'
  *   existingValue - Pre-populated value if editing an existing entry (number or null)
  *   position   - { x, y } coordinates for positioning the overlay
  *   onSave     - async (value: number) => void — called on Enter with validated numeric value
+ *   onDelete   - async () => void — called when user deletes the entry (optional, only shown when existingValue != null)
  *   onDismiss  - () => void — called on Escape or click outside
  */
-export default function InlineInput({ date, metric, category, existingValue, position, onSave, onDismiss }) {
+export default function InlineInput({ date, metric, category, existingValue, position, onSave, onDelete, onDismiss }) {
   const [value, setValue] = useState(existingValue != null ? String(existingValue) : '')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [toast, setToast] = useState('')
   const inputRef = useRef(null)
   const containerRef = useRef(null)
@@ -77,6 +79,17 @@ export default function InlineInput({ date, metric, category, existingValue, pos
     }
   }
 
+  async function handleDelete() {
+    if (!onDelete) return
+    setDeleting(true)
+    try {
+      await onDelete()
+    } catch (err) {
+      setToast(err.message || 'Delete failed. Please try again.')
+      setDeleting(false)
+    }
+  }
+
   function handleKeyDown(e) {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -116,7 +129,7 @@ export default function InlineInput({ date, metric, category, existingValue, pos
         value={value}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
-        disabled={saving}
+        disabled={saving || deleting}
         className="w-full bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs text-text-primary outline-none focus:border-accent transition-colors disabled:opacity-50"
         placeholder="Enter value"
         aria-label={`Value for ${metric} on ${date}`}
@@ -132,8 +145,18 @@ export default function InlineInput({ date, metric, category, existingValue, pos
           {toast}
         </p>
       )}
-      <div className="text-[8px] text-text-muted mt-1">
-        Enter to save · Esc to cancel
+      <div className="flex items-center justify-between mt-1">
+        <span className="text-[8px] text-text-muted">Enter to save · Esc to cancel</span>
+        {onDelete && existingValue != null && (
+          <button
+            onClick={handleDelete}
+            disabled={deleting || saving}
+            className="text-[9px] text-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+            data-testid="inline-input-delete"
+          >
+            {deleting ? '...' : '🗑 Delete'}
+          </button>
+        )}
       </div>
     </div>
   )
