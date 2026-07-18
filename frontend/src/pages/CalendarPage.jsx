@@ -412,23 +412,7 @@ export default function CalendarPage() {
             </div>
           )}
 
-          {/* Color legend */}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="flex items-center gap-1 text-[9px] font-body text-text-muted">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: PERSONAL_COLOR }} />
-              Personal
-            </span>
-            {projects.slice(0, 5).map((p) => (
-              <span key={p.id} className="flex items-center gap-1 text-[9px] font-body text-text-muted">
-                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getProjectColor(p.id, projectColorMap) }} />
-                {p.name}
-              </span>
-            ))}
-            <span className="flex items-center gap-1 text-[9px] font-body text-text-muted">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: CANVAS_COLOR }} />
-              Canvas (coming soon)
-            </span>
-          </div>
+          {/* Color legend — only shown in the selected day detail when items are visible */}
         </>
       )}
     </div>
