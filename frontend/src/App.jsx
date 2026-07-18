@@ -1,15 +1,13 @@
-import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import ProjectsBoard from './pages/ProjectsBoard'
-import QAFlow from './pages/QAFlow'
 import GymPage from './pages/GymPage'
 import HabitView from './pages/HabitView'
 import Settings from './pages/Settings'
 
 const navItems = [
   { to: '/', label: 'Quests', icon: '⚔️' },
-  { to: '/log', label: 'Log', icon: '✏️' },
-  { to: '/gym', label: 'Gym', icon: '🏋️' },
   { to: '/habits', label: 'Habits', icon: '🌿' },
+  { to: '/gym', label: 'Gym', icon: '🏋️' },
   { to: '/settings', label: 'Settings', icon: '⚙️' },
 ]
 
@@ -20,7 +18,7 @@ export default function App() {
         <main className="flex-1 pb-20 md:pb-4 px-3 md:px-6 pt-4">
           <Routes>
             <Route path="/" element={<ProjectsBoard />} />
-            <Route path="/log" element={<QAFlow />} />
+            <Route path="/log" element={<Navigate to="/habits" replace />} />
             <Route path="/gym" element={<GymPage />} />
             <Route path="/habits" element={<HabitView />} />
             <Route path="/settings" element={<Settings />} />
