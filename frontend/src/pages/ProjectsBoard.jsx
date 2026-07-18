@@ -32,6 +32,8 @@ export default function ProjectsBoard() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', category: 'personal_project', next_action: '' })
   const [filterCategory, setFilterCategory] = useState('')
+  const [draggedId, setDraggedId] = useState(null)
+  const [dragOverStatus, setDragOverStatus] = useState(null)
 
   useEffect(() => {
     loadThreads()
@@ -68,6 +70,37 @@ export default function ProjectsBoard() {
 
   function toggleCollapse(status) {
     setCollapsed((prev) => ({ ...prev, [status]: !prev[status] }))
+  }
+
+  function handleDragStart(e, threadId) {
+    setDraggedId(threadId)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleDragOver(e, status) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverStatus(status)
+  }
+
+  function handleDragLeave() {
+    setDragOverStatus(null)
+  }
+
+  async function handleDrop(e, targetStatus) {
+    e.preventDefault()
+    setDragOverStatus(null)
+    if (draggedId == null) return
+    const thread = threads.find((t) => t.id === draggedId)
+    if (thread && thread.status !== targetStatus) {
+      await handleStatusChange(draggedId, targetStatus)
+    }
+    setDraggedId(null)
+  }
+
+  function handleDragEnd() {
+    setDraggedId(null)
+    setDragOverStatus(null)
   }
 
   const grouped = STATUSES.reduce((acc, s) => {
@@ -131,10 +164,18 @@ export default function ProjectsBoard() {
         </form>
       )}
 
-      {/* Mobile: stacked collapsible */}
+      {/* Mobile: stacked collapsible — drag between sections */}
       <div className="flex flex-col gap-3 md:hidden">
         {STATUSES.map((status) => (
-          <div key={status} className="bg-charcoal-light border border-charcoal-lighter rounded p-3">
+          <div
+            key={status}
+            className={`bg-charcoal-light border border-charcoal-lighter rounded p-3 transition-colors ${
+              dragOverStatus === status ? 'ring-1 ring-accent/30 bg-charcoal-lighter/50' : ''
+            }`}
+            onDragOver={(e) => handleDragOver(e, status)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, status)}
+          >
             <button
               onClick={() => toggleCollapse(status)}
               className="w-full flex items-center justify-between"
@@ -145,12 +186,19 @@ export default function ProjectsBoard() {
             {!collapsed[status] && (
               <div className="mt-3 flex flex-col gap-2">
                 {grouped[status].map((thread) => (
-                  <ProjectCard
+                  <div
                     key={thread.id}
-                    thread={thread}
-                    onStatusChange={handleStatusChange}
-                    onDelete={handleDelete}
-                  />
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, thread.id)}
+                    onDragEnd={handleDragEnd}
+                    className={draggedId === thread.id ? 'opacity-50' : ''}
+                  >
+                    <ProjectCard
+                      thread={thread}
+                      onStatusChange={handleStatusChange}
+                      onDelete={handleDelete}
+                    />
+                  </div>
                 ))}
                 {grouped[status].length === 0 && (
                   <p className="text-text-muted text-xs italic font-body">No projects</p>
@@ -161,21 +209,36 @@ export default function ProjectsBoard() {
         ))}
       </div>
 
-      {/* Desktop: kanban columns */}
+      {/* Desktop: kanban columns — drag to move between statuses */}
       <div className="hidden md:grid md:grid-cols-4 gap-4">
         {STATUSES.map((status) => (
-          <div key={status} className="flex flex-col gap-2">
+          <div
+            key={status}
+            className={`flex flex-col gap-2 min-h-[200px] rounded-lg p-2 transition-colors ${
+              dragOverStatus === status ? 'bg-charcoal-lighter/50 ring-1 ring-accent/30' : ''
+            }`}
+            onDragOver={(e) => handleDragOver(e, status)}
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDrop(e, status)}
+          >
             <div className="flex items-center justify-between mb-2">
               <span className={`badge ${STATUS_COLORS[status]}`}>{STATUS_LABELS[status]}</span>
               <span className="text-text-muted text-xs font-body">{grouped[status].length}</span>
             </div>
             {grouped[status].map((thread) => (
-              <ProjectCard
+              <div
                 key={thread.id}
-                thread={thread}
-                onStatusChange={handleStatusChange}
-                onDelete={handleDelete}
-              />
+                draggable
+                onDragStart={(e) => handleDragStart(e, thread.id)}
+                onDragEnd={handleDragEnd}
+                className={`cursor-grab active:cursor-grabbing ${draggedId === thread.id ? 'opacity-50' : ''}`}
+              >
+                <ProjectCard
+                  thread={thread}
+                  onStatusChange={handleStatusChange}
+                  onDelete={handleDelete}
+                />
+              </div>
             ))}
           </div>
         ))}
