@@ -45,6 +45,7 @@ export default function HabitView() {
   const [loading, setLoading] = useState(true)
   const [timeRange, setTimeRange] = useState('1m')
   const [inlineEdit, setInlineEdit] = useState(null)
+  const [datePickerOpen, setDatePickerOpen] = useState(null) // metric key when date picker is showing
 
   useEffect(() => {
     loadLogs()
@@ -109,6 +110,15 @@ export default function HabitView() {
   // Handle "Add today" button when no chart exists
   function handleAddToday(metric, category) {
     openInlineEdit(todayStr(), metric, category, null, { x: 60, y: 20 })
+  }
+
+  // Handle adding for a specific date (from date picker)
+  function handleAddForDate(metric, category, date) {
+    // Check if there's an existing value for this date
+    const existing = logs.find(
+      (log) => log.date === date && log.metric === metric && log.category === category
+    )
+    openInlineEdit(date, metric, category, existing ? existing.value : null, { x: 60, y: 20 })
   }
 
   // Handle save from InlineInput
@@ -220,16 +230,43 @@ export default function HabitView() {
                   <span className="font-body text-[10px] text-text-secondary">
                     LVL {Math.floor(total / 5)}
                   </span>
-                  {/* Always-visible Add button */}
+                  {/* Add button — toggles date picker */}
                   <button
-                    onClick={() => handleAddToday(metric, category)}
+                    onClick={() => setDatePickerOpen(datePickerOpen === `${category}|${metric}` ? null : `${category}|${metric}`)}
                     className="text-[10px] text-accent hover:text-accent/80 font-body transition-colors"
-                    title="Log today"
+                    title="Log an entry"
                   >
                     + Add
                   </button>
                 </div>
               </div>
+
+              {/* Date picker row — shown when + Add is clicked */}
+              {datePickerOpen === `${category}|${metric}` && (
+                <div className="flex items-center gap-2 mb-3">
+                  <input
+                    type="date"
+                    defaultValue={todayStr()}
+                    max={todayStr()}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleAddForDate(metric, category, e.target.value)
+                        setDatePickerOpen(null)
+                      }
+                    }}
+                    className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs text-text-primary font-body focus:outline-none focus:border-accent"
+                  />
+                  <button
+                    onClick={() => {
+                      handleAddToday(metric, category)
+                      setDatePickerOpen(null)
+                    }}
+                    className="px-2 py-1 text-[10px] font-body bg-charcoal-lighter text-text-primary rounded hover:bg-accent hover:text-white transition-colors"
+                  >
+                    Today
+                  </button>
+                </div>
+              )}
 
               {hasData && (
                 <>

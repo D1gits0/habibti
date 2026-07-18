@@ -12,7 +12,7 @@ function parseReps(notes) {
   return match ? parseInt(match[1], 10) : null
 }
 
-export default function OverloadChart({ exerciseName, data, timeRange, onTimeRangeChange, onDotClick }) {
+export default function OverloadChart({ exerciseName, data, timeRange, onTimeRangeChange, onDotClick, hideTimeRange }) {
   const chartData = (data || []).map((entry) => ({
     date: entry.date,
     weight: entry.value,
@@ -22,21 +22,23 @@ export default function OverloadChart({ exerciseName, data, timeRange, onTimeRan
   return (
     <div className="mt-2 mb-4">
       {/* Time range selector */}
-      <div className="flex items-center gap-1 mb-2">
-        {TIME_RANGES.map((range) => (
-          <button
-            key={range}
-            onClick={() => onTimeRangeChange(range)}
-            className={`px-2 py-0.5 text-[10px] font-body rounded transition-colors ${
-              timeRange === range
-                ? 'bg-accent text-white'
-                : 'bg-charcoal-lighter text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            {range}
-          </button>
-        ))}
-      </div>
+      {!hideTimeRange && (
+        <div className="flex items-center gap-1 mb-2">
+          {TIME_RANGES.map((range) => (
+            <button
+              key={range}
+              onClick={() => onTimeRangeChange(range)}
+              className={`px-2 py-0.5 text-[10px] font-body rounded transition-colors ${
+                timeRange === range
+                  ? 'bg-accent text-white'
+                  : 'bg-charcoal-lighter text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              {range}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Chart or empty state */}
       {chartData.length === 0 ? (

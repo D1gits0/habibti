@@ -1,11 +1,26 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getGymExercises, createLog, getLogs, getGymHistory, upsertLog } from '../api'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import SwapPicker from '../components/SwapPicker'
 import OverloadChart from '../components/OverloadChart'
 import InlineInput from '../components/InlineInput'
 
 const SPLIT_OPTIONS = ['Push', 'Pull', 'Legs', 'Rest', 'Upper', 'Lower']
 const MAX_EXERCISES_PER_SESSION = 20
+
+// Muscle group mapping for the exercise history view
+const MUSCLE_GROUPS = {
+  Chest: ['Incline DB Press', 'Cable Chest Fly', 'Pec Deck', 'Weighted Dips'],
+  Back: ['Lat Pulldowns', 'Close Grip Cable Rows', 'Wide Grip Cable Rows', 'Pull Ups', 'Reverse Fly', 'Archer Pull'],
+  Shoulders: ['Machine Shoulder Press', 'Lateral Raises'],
+  Arms: ['Overhead Tricep Extension', 'Preacher Curls', 'Cable Hammer Curls', 'DB Hammer Curl', 'Incline Curls'],
+  Legs: ['Bulgarian Split Squat', '45 Degree Back Extension', 'Leg Extensions', 'Leg Curls', 'Calf Raises'],
+  Abs: ['Cable Crunches', 'Leg Raises', 'Side Planks'],
+}
+const MUSCLE_GROUP_NAMES = Object.keys(MUSCLE_GROUPS)
+
+// Colors for multi-line chart (one color per exercise in a group)
+const LINE_COLORS = ['#9ca3af', '#FF4F00', '#60a5fa', '#34d399', '#fbbf24', '#a78bfa']
 
 /**
  * Validate a single exercise entry field set.
@@ -79,9 +94,9 @@ export default function GymPage() {
 
   // Exercise History viewer state
   const [historyMetrics, setHistoryMetrics] = useState([]) // all gym exercise names from logs
-  const [historySelectedMetric, setHistorySelectedMetric] = useState('')
+  const [historySelectedGroup, setHistorySelectedGroup] = useState('Chest')
   const [historyTimeRange, setHistoryTimeRange] = useState('3m')
-  const [historyData, setHistoryData] = useState([])
+  const [historyData, setHistoryData] = useState({}) // { exerciseName: [entries] }
   const [historyLoading, setHistoryLoading] = useState(false)
 
   useEffect(() => {
@@ -152,9 +167,9 @@ export default function GymPage() {
   }, [selectedSplit, exercises])
 
   // Determine if all primary exercises have been saved (triggers abs toggle)
-  const allPrimarySaved =
-    logEntries.length > 0 &&
-    logEntries.filter((e) => e.primaryName).every((e) => e.saved)
+  // Show abs toggle as soon as the user has selected a non-Rest split and exercises are loaded
+  const showAbsToggle =
+    selectedSplit && selectedSplit !== 'Rest' && !loading && !error && exercises.length > 0
 
   // Load overload chart data for all exercises that have been saved
   useEffect(() => {
@@ -194,9 +209,6 @@ export default function GymPage() {
         const gymLogs = await getLogs({ category: 'gym' })
         const metrics = [...new Set(gymLogs.map((l) => l.metric))].sort()
         setHistoryMetrics(metrics)
-        if (metrics.length > 0 && !historySelectedMetric) {
-          setHistorySelectedMetric(metrics[0])
-        }
       } catch {
         setHistoryMetrics([])
       }
@@ -204,21 +216,37 @@ export default function GymPage() {
     loadHistoryMetrics()
   }, [])
 
-  // Load history data when selected metric or time range changes
+  // Load history data for the selected muscle group when group or time range changes
   useEffect(() => {
-    if (!historySelectedMetric) return
-    async function loadHistory() {
+    if (!historySelectedGroup) return
+    const exercisesInGroup = MUSCLE_GROUPS[historySelectedGroup] || []
+    // Only load exercises that actually have log data
+    const relevant = exercisesInGroup.filter((ex) => historyMetrics.includes(ex))
+    if (relevant.length === 0) {
+      setHistoryData({})
+      return
+    }
+
+    async function loadGroupHistory() {
       setHistoryLoading(true)
       try {
-        const data = await getGymHistory(historySelectedMetric, historyTimeRange)
-        setHistoryData(data || [])
+        const results = {}
+        await Promise.all(
+          relevant.map(async (exerciseName) => {
+            const data = await getGymHistory(exerciseName, historyTimeRange)
+            if (data && data.length > 0) {
+              results[exerciseName] = data
+            }
+          })
+        )
+        setHistoryData(results)
       } catch {
-        setHistoryData([])
+        setHistoryData({})
       }
       setHistoryLoading(false)
     }
-    loadHistory()
-  }, [historySelectedMetric, historyTimeRange])
+    loadGroupHistory()
+  }, [historySelectedGroup, historyTimeRange, historyMetrics])
 
   // Handle chart dot click to open InlineInput
   const handleChartDotClick = useCallback((exerciseName) => (dotData) => {
@@ -737,8 +765,8 @@ export default function GymPage() {
             </p>
           )}
 
-          {/* Abs Toggle - shown after all primary exercises are saved */}
-          {allPrimarySaved && absToggle === null && (
+          {/* Abs Toggle - shown once exercises are loaded for any non-Rest split */}
+          {showAbsToggle && absToggle === null && (
             <div className="panel p-4 mt-4" data-testid="abs-toggle">
               <p className="font-body text-text-primary text-sm mb-3">
                 Was today an abs day?
@@ -955,25 +983,29 @@ export default function GymPage() {
         </div>
       )}
 
-      {/* Exercise History Viewer — always accessible on the Gym page */}
+      {/* Exercise History — by Muscle Group */}
       {historyMetrics.length > 0 && (
         <div className="mt-6" data-testid="exercise-history-section">
           <h2 className="font-body text-text-primary text-xs mb-3">EXERCISE HISTORY</h2>
           <div className="panel p-4">
-            {/* Exercise selector dropdown */}
-            <div className="flex items-center gap-3 mb-3">
-              <select
-                value={historySelectedMetric}
-                onChange={(e) => setHistorySelectedMetric(e.target.value)}
-                className="bg-charcoal border border-charcoal-lighter rounded px-3 py-1.5 text-xs text-text-primary font-body focus:outline-none focus:border-accent flex-1"
-              >
-                {historyMetrics.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
+            {/* Muscle group toggle */}
+            <div className="flex flex-wrap gap-1 mb-3">
+              {MUSCLE_GROUP_NAMES.map((group) => (
+                <button
+                  key={group}
+                  onClick={() => setHistorySelectedGroup(group)}
+                  className={`px-2 py-1 text-[10px] font-body rounded transition-colors ${
+                    historySelectedGroup === group
+                      ? 'bg-accent text-white'
+                      : 'bg-charcoal-lighter text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  {group}
+                </button>
+              ))}
             </div>
 
-            {/* Time range toggles — same options as habits */}
+            {/* Time range toggles */}
             <div className="flex gap-1 mb-3">
               {['1m', '3m', '6m', 'ytd'].map((range) => (
                 <button
@@ -981,8 +1013,8 @@ export default function GymPage() {
                   onClick={() => setHistoryTimeRange(range)}
                   className={`px-2 py-0.5 text-[10px] font-body rounded transition-colors ${
                     historyTimeRange === range
-                      ? 'bg-accent text-white'
-                      : 'bg-charcoal-lighter text-text-muted hover:text-text-secondary'
+                      ? 'bg-charcoal-lighter text-text-primary border border-charcoal-lighter'
+                      : 'text-text-muted hover:text-text-secondary'
                   }`}
                 >
                   {range === 'ytd' ? 'YTD' : range.toUpperCase()}
@@ -990,18 +1022,64 @@ export default function GymPage() {
               ))}
             </div>
 
-            {/* Chart */}
+            {/* Multi-exercise chart for the selected muscle group */}
             {historyLoading ? (
               <div className="h-[150px] flex items-center justify-center text-text-muted text-xs">
                 Loading...
               </div>
+            ) : Object.keys(historyData).length === 0 ? (
+              <div className="h-[120px] flex items-center justify-center text-text-secondary text-xs font-body">
+                No data for {historySelectedGroup} in this period
+              </div>
             ) : (
-              <OverloadChart
-                exerciseName={historySelectedMetric}
-                data={historyData}
-                timeRange={historyTimeRange}
-                onTimeRangeChange={(range) => setHistoryTimeRange(range)}
-              />
+              <>
+                {/* Legend */}
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {Object.keys(historyData).map((name, idx) => (
+                    <span key={name} className="flex items-center gap-1 text-[9px] font-body text-text-muted">
+                      <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: LINE_COLORS[idx % LINE_COLORS.length] }} />
+                      {name}
+                    </span>
+                  ))}
+                </div>
+                {/* Chart */}
+                <ResponsiveContainer width="100%" height={150}>
+                  <LineChart margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3a" />
+                    <XAxis
+                      dataKey="date"
+                      type="category"
+                      allowDuplicatedCategory={false}
+                      stroke="#6b7280"
+                      tick={{ fontSize: 9, fill: '#6b7280' }}
+                      tickFormatter={(v) => v.slice(5)}
+                    />
+                    <YAxis stroke="#9ca3af" tick={{ fontSize: 9, fill: '#9ca3af' }} width={35} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#242430',
+                        border: '1px solid #2e2e3a',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                      }}
+                      labelStyle={{ color: '#9ca3af' }}
+                    />
+                    {Object.entries(historyData).map(([name, entries], idx) => (
+                      <Line
+                        key={name}
+                        data={entries.map((e) => ({ date: e.date, [name]: e.value }))}
+                        dataKey={name}
+                        type="monotone"
+                        stroke={LINE_COLORS[idx % LINE_COLORS.length]}
+                        strokeWidth={1.5}
+                        dot={false}
+                        connectNulls
+                        name={name}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </>
             )}
           </div>
         </div>
