@@ -47,6 +47,11 @@ export default function CalendarPage() {
   const [view, setView] = useState('Month')
   const [year, setYear] = useState(() => new Date().getFullYear())
   const [month, setMonth] = useState(() => new Date().getMonth() + 1)
+  const [weekStartDate, setWeekStartDate] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - d.getDay()) // Sunday of current week
+    return d.toISOString().split('T')[0]
+  })
   const [events, setEvents] = useState([])
   const [projects, setProjects] = useState([])
   const [selectedDay, setSelectedDay] = useState(null)
@@ -68,10 +73,10 @@ export default function CalendarPage() {
     getThreads().then(setProjects).catch(() => setProjects([]))
   }, [])
 
-  // Load events when view/month/year changes
+  // Load events when view/month/year/weekStart changes
   useEffect(() => {
     loadEvents()
-  }, [view, year, month])
+  }, [view, year, month, weekStartDate])
 
   async function loadEvents() {
     setLoading(true)
@@ -80,8 +85,7 @@ export default function CalendarPage() {
       dateFrom = `${year}-01-01`
       dateTo = `${year}-12-31`
     } else if (view === 'Week') {
-      const today = new Date(year, month - 1, new Date().getDate())
-      const dates = getWeekDates(today)
+      const dates = getWeekDates(new Date(weekStartDate))
       dateFrom = dates[0]
       dateTo = dates[6]
     } else {
@@ -100,6 +104,10 @@ export default function CalendarPage() {
   function navigatePrev() {
     if (view === 'Year') {
       setYear((y) => y - 1)
+    } else if (view === 'Week') {
+      const d = new Date(weekStartDate)
+      d.setDate(d.getDate() - 7)
+      setWeekStartDate(d.toISOString().split('T')[0])
     } else {
       if (month === 1) { setMonth(12); setYear((y) => y - 1) }
       else setMonth((m) => m - 1)
@@ -110,6 +118,10 @@ export default function CalendarPage() {
   function navigateNext() {
     if (view === 'Year') {
       setYear((y) => y + 1)
+    } else if (view === 'Week') {
+      const d = new Date(weekStartDate)
+      d.setDate(d.getDate() + 7)
+      setWeekStartDate(d.toISOString().split('T')[0])
     } else {
       if (month === 12) { setMonth(1); setYear((y) => y + 1) }
       else setMonth((m) => m + 1)
@@ -163,8 +175,8 @@ export default function CalendarPage() {
 
   // Week view dates
   const weekDates = useMemo(() => {
-    return getWeekDates(new Date(year, month - 1, today.getDate()))
-  }, [year, month])
+    return getWeekDates(new Date(weekStartDate))
+  }, [weekStartDate])
 
   return (
     <div className="md:mt-12">

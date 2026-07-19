@@ -98,6 +98,7 @@ def init_db():
                 due_date TEXT NOT NULL,
                 source TEXT NOT NULL DEFAULT 'personal' CHECK(source IN ('personal', 'canvas')),
                 project_id INTEGER REFERENCES threads(id) ON DELETE SET NULL,
+                priority INTEGER,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         """)
@@ -107,6 +108,11 @@ def init_db():
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_deadlines_project ON deadlines(project_id)
         """)
+        # Add priority column to deadlines if not present
+        try:
+            conn.execute("ALTER TABLE deadlines ADD COLUMN priority INTEGER")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
 
         # Push subscriptions table
         conn.execute("""

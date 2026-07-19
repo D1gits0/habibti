@@ -255,6 +255,8 @@ function ProjectCard({ thread, onStatusChange, onDelete }) {
   const [showSubtasks, setShowSubtasks] = useState(false)
   const [error, setError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [editingProject, setEditingProject] = useState(false)
+  const [editProjectForm, setEditProjectForm] = useState({ name: thread.name, category: thread.category, next_action: thread.next_action || '' })
 
   useEffect(() => {
     if (showSubtasks) {
@@ -304,6 +306,21 @@ function ProjectCard({ thread, onStatusChange, onDelete }) {
       }
     } catch {
       // silent fail for progress bar load
+    }
+  }
+
+  async function handleSaveProject() {
+    try {
+      await updateThread(thread.id, {
+        name: editProjectForm.name.trim(),
+        category: editProjectForm.category,
+        next_action: editProjectForm.next_action.trim() || null,
+      })
+      setEditingProject(false)
+      // Force a reload by toggling expand
+      window.location.reload()
+    } catch {
+      setError('Failed to save project')
     }
   }
 
@@ -366,12 +383,64 @@ function ProjectCard({ thread, onStatusChange, onDelete }) {
             )}
           </div>
 
-          <button
-            onClick={() => setShowSubtasks(!showSubtasks)}
-            className="text-xs font-body text-text-secondary hover:text-text-primary transition-colors"
-          >
-            {showSubtasks ? '▾ Hide Subtasks' : '▸ Show Subtasks'}
-          </button>
+          {/* Edit project button */}
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setShowSubtasks(!showSubtasks)}
+              className="text-xs font-body text-text-secondary hover:text-text-primary transition-colors"
+            >
+              {showSubtasks ? '▾ Hide Subtasks' : '▸ Show Subtasks'}
+            </button>
+            <button
+              onClick={() => setEditingProject(!editingProject)}
+              className="text-xs font-body text-text-muted hover:text-accent transition-colors"
+            >
+              ✎ Edit
+            </button>
+          </div>
+
+          {/* Inline project edit form */}
+          {editingProject && (
+            <div className="flex flex-col gap-2 mb-3 p-2 border border-charcoal-lighter rounded">
+              <input
+                type="text"
+                value={editProjectForm.name}
+                onChange={(e) => setEditProjectForm((f) => ({ ...f, name: e.target.value }))}
+                className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs font-body text-text-primary"
+                placeholder="Project name"
+              />
+              <select
+                value={editProjectForm.category}
+                onChange={(e) => setEditProjectForm((f) => ({ ...f, category: e.target.value }))}
+                className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs font-body text-text-secondary"
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={editProjectForm.next_action}
+                onChange={(e) => setEditProjectForm((f) => ({ ...f, next_action: e.target.value }))}
+                className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs font-body text-text-primary"
+                placeholder="Next action"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveProject}
+                  className="px-2 py-1 text-[10px] font-body bg-charcoal-lighter text-text-primary rounded hover:bg-accent hover:text-white transition-colors"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setEditingProject(false)}
+                  className="px-2 py-1 text-[10px] font-body text-text-muted hover:text-text-secondary transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           {showSubtasks && (
             <SubtaskList
@@ -524,6 +593,7 @@ function SubtaskGroup({ threadId, items, allSubtasks, parentId, depth, onReload,
 function SubtaskItem({ item, threadId, allSubtasks, depth, onReload, setError, onDragStart, onDragOver, onDrop, isDragging }) {
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(item.description)
+  const [showDatePicker, setShowDatePicker] = useState(false)
 
   async function handleToggle() {
     try {
@@ -555,6 +625,16 @@ function SubtaskItem({ item, threadId, allSubtasks, depth, onReload, setError, o
       onReload()
     } catch (err) {
       setError(err.message || 'Failed to delete subtask')
+    }
+  }
+
+  async function handleSetDueDate(date) {
+    try {
+      await updateSubtask(item.id, { due_date: date || null })
+      setShowDatePicker(false)
+      onReload()
+    } catch (err) {
+      setError(err.message || 'Failed to set due date')
     }
   }
 
@@ -603,7 +683,42 @@ function SubtaskItem({ item, threadId, allSubtasks, depth, onReload, setError, o
         >
           ✕
         </button>
+        {/* Due date icon — shown on hover */}
+        <button
+          onClick={() => setShowDatePicker(!showDatePicker)}
+          className={`text-[10px] opacity-0 group-hover:opacity-100 transition-all ${item.due_date ? 'text-accent' : 'text-text-muted hover:text-text-secondary'}`}
+          aria-label="Set due date"
+          title={item.due_date ? `Due: ${item.due_date}` : 'Set due date'}
+        >
+          📅
+        </button>
       </div>
+
+      {/* Due date picker — inline below the item */}
+      {showDatePicker && (
+        <div className="flex items-center gap-2 ml-8 py-1">
+          <input
+            type="date"
+            defaultValue={item.due_date || ''}
+            onChange={(e) => handleSetDueDate(e.target.value)}
+            className="bg-charcoal border border-charcoal-lighter rounded px-2 py-0.5 text-[10px] text-text-primary font-body focus:outline-none focus:border-accent"
+          />
+          {item.due_date && (
+            <button
+              onClick={() => handleSetDueDate('')}
+              className="text-[9px] text-red-400 hover:text-red-300 font-body"
+            >
+              Clear
+            </button>
+          )}
+          <button
+            onClick={() => setShowDatePicker(false)}
+            className="text-[9px] text-text-muted hover:text-text-secondary font-body"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {/* Render children */}
       {item.children && item.children.length > 0 && (
