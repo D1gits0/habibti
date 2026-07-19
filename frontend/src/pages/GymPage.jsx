@@ -1207,7 +1207,7 @@ export default function GymPage() {
         )}
       </div>
 
-      {/* Progressive Overload — e1RM charts by Muscle Group */}
+      {/* Progressive Overload — ONE chart per muscle group, all exercises as separate lines */}
       {historyMetrics.length > 0 && (
         <div className="mt-6" data-testid="exercise-history-section">
           <h2 className="font-body text-text-primary text-xs mb-3">PROGRESSIVE OVERLOAD</h2>
@@ -1246,61 +1246,90 @@ export default function GymPage() {
               ))}
             </div>
 
-            {/* e1RM charts per exercise — using OverloadChart component */}
+            {/* Combined e1RM chart — all exercises in this muscle group on one graph */}
             {historyLoading ? (
-              <div className="h-[100px] flex items-center justify-center text-text-muted text-xs">
+              <div className="h-[150px] flex items-center justify-center text-text-muted text-xs">
                 Loading...
               </div>
             ) : Object.keys(historyData).length === 0 ? (
-              <div className="h-[80px] flex items-center justify-center text-text-secondary text-xs font-body">
+              <div className="h-[100px] flex items-center justify-center text-text-secondary text-xs font-body">
                 No data for {historySelectedGroup} in this period
               </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                {Object.entries(historyData).map(([name, entries]) => {
-                  // Compute summary stats for the header
-                  const rMatch = entries[entries.length - 1]?.notes?.match(/(\d+)r/)
-                  const sMatch = entries[entries.length - 1]?.notes?.match(/(\d+)s/)
-                  const lastReps = rMatch ? parseInt(rMatch[1]) : 1
-                  const lastSets = sMatch ? parseInt(sMatch[1]) : 1
-                  const lastWeight = entries[entries.length - 1]?.value || 0
-                  const latestE1rm = Math.round(lastWeight * (1 + lastReps / 30))
-                  const bestE1rm = entries.reduce((max, e) => {
-                    const r = e.notes?.match(/(\d+)r/)
-                    const reps = r ? parseInt(r[1]) : 1
-                    const e1rm = Math.round(e.value * (1 + reps / 30))
-                    return e1rm > max ? e1rm : max
-                  }, 0)
+            ) : (() => {
+              // Compute e1RM data per exercise
+              const exerciseLines = Object.entries(historyData).map(([name, entries]) => ({
+                name,
+                data: entries.map((e) => {
+                  const rMatch = e.notes?.match(/(\d+)r/)
+                  const reps = rMatch ? parseInt(rMatch[1]) : 1
+                  return { date: e.date, e1rm: Math.round(e.value * (1 + reps / 30)) }
+                }),
+              }))
 
-                  return (
-                    <div key={name} className="border-b border-charcoal-lighter/30 pb-3 last:border-0 last:pb-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-text-primary text-xs font-body">{name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-accent text-xs font-body font-medium">
-                            e1RM: {latestE1rm}
-                          </span>
-                          <span className="text-[9px] text-text-muted font-body">
-                            best: {bestE1rm}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-[9px] text-text-muted font-body mb-1">
-                        Last: {lastWeight}lbs × {lastReps}r × {lastSets}s
-                      </div>
-                      {/* Reuse the exact same OverloadChart component */}
-                      <OverloadChart
-                        exerciseName={name}
-                        data={entries}
-                        timeRange={historyTimeRange}
-                        onTimeRangeChange={(range) => setHistoryTimeRange(range)}
-                        hideTimeRange={true}
+              return (
+                <>
+                  {/* Legend */}
+                  <div className="flex flex-wrap gap-3 mb-2">
+                    {exerciseLines.map((ex, idx) => (
+                      <span key={ex.name} className="flex items-center gap-1 text-[9px] font-body text-text-muted">
+                        <span
+                          className="inline-block w-3 h-[3px] rounded-full"
+                          style={{ backgroundColor: LINE_COLORS[idx % LINE_COLORS.length] }}
+                        />
+                        {ex.name}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Single chart with multiple lines */}
+                  <ResponsiveContainer width="100%" height={180}>
+                    <LineChart margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3a" />
+                      <XAxis
+                        dataKey="date"
+                        type="category"
+                        allowDuplicatedCategory={false}
+                        stroke="#6b7280"
+                        tick={{ fontSize: 9, fill: '#6b7280' }}
+                        tickFormatter={(v) => v.slice(5)}
                       />
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+                      <YAxis
+                        stroke="#9ca3af"
+                        tick={{ fontSize: 9, fill: '#9ca3af' }}
+                        width={35}
+                        domain={['dataMin - 10', 'dataMax + 10']}
+                        label={{ value: 'e1RM', angle: -90, position: 'insideLeft', style: { fontSize: 8, fill: '#6b7280' } }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#242430',
+                          border: '1px solid #2e2e3a',
+                          borderRadius: '6px',
+                          fontSize: '10px',
+                        }}
+                        labelStyle={{ color: '#9ca3af' }}
+                        formatter={(value) => [`${value} lbs`, 'e1RM']}
+                      />
+                      {exerciseLines.map((ex, idx) => (
+                        <Line
+                          key={ex.name}
+                          data={ex.data}
+                          dataKey="e1rm"
+                          type="monotone"
+                          stroke={LINE_COLORS[idx % LINE_COLORS.length]}
+                          strokeWidth={2}
+                          dot={{ fill: LINE_COLORS[idx % LINE_COLORS.length], r: 3 }}
+                          connectNulls={false}
+                          name={ex.name}
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+
+                  <p className="text-[8px] text-text-muted mt-2">e1RM = weight × (1 + reps/30) — Epley formula. Each line = one exercise.</p>
+                </>
+              )
+            })()}
           </div>
         </div>
       )}
