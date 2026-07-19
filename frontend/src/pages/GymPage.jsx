@@ -1207,10 +1207,10 @@ export default function GymPage() {
         )}
       </div>
 
-      {/* Exercise History — by Muscle Group */}
+      {/* Volume Score Ranking — by Muscle Group */}
       {historyMetrics.length > 0 && (
         <div className="mt-6" data-testid="exercise-history-section">
-          <h2 className="font-body text-text-primary text-xs mb-3">EXERCISE HISTORY</h2>
+          <h2 className="font-body text-text-primary text-xs mb-3">VOLUME SCORE</h2>
           <div className="panel p-4">
             {/* Muscle group toggle */}
             <div className="flex flex-wrap gap-1 mb-3">
@@ -1246,70 +1246,82 @@ export default function GymPage() {
               ))}
             </div>
 
-            {/* Multi-exercise chart for the selected muscle group */}
+            {/* Volume score ranking per exercise */}
             {historyLoading ? (
-              <div className="h-[150px] flex items-center justify-center text-text-muted text-xs">
+              <div className="h-[100px] flex items-center justify-center text-text-muted text-xs">
                 Loading...
               </div>
             ) : Object.keys(historyData).length === 0 ? (
-              <div className="h-[120px] flex items-center justify-center text-text-secondary text-xs font-body">
+              <div className="h-[80px] flex items-center justify-center text-text-secondary text-xs font-body">
                 No data for {historySelectedGroup} in this period
               </div>
             ) : (
-              <>
-                {/* Legend */}
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {Object.keys(historyData).map((name, idx) => (
-                    <span key={name} className="flex items-center gap-1 text-[9px] font-body text-text-muted">
-                      <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: LINE_COLORS[idx % LINE_COLORS.length] }} />
-                      {name}
-                    </span>
+              <div className="flex flex-col gap-3">
+                {Object.entries(historyData)
+                  .map(([name, entries]) => {
+                    // Compute latest volume score and best volume score
+                    const scores = entries.map((e) => {
+                      const rMatch = e.notes?.match(/(\d+)r/)
+                      const sMatch = e.notes?.match(/(\d+)s/)
+                      const reps = rMatch ? parseInt(rMatch[1]) : 1
+                      const sets = sMatch ? parseInt(sMatch[1]) : 1
+                      return { date: e.date, score: Math.round(e.value * reps * sets), weight: e.value, reps, sets }
+                    })
+                    const latest = scores[scores.length - 1]
+                    const best = scores.reduce((max, s) => s.score > max.score ? s : max, scores[0])
+                    const prev = scores.length > 1 ? scores[scores.length - 2] : null
+                    const trend = prev ? latest.score - prev.score : 0
+                    return { name, scores, latest, best, trend }
+                  })
+                  .sort((a, b) => (b.latest?.score || 0) - (a.latest?.score || 0))
+                  .map(({ name, scores, latest, best, trend }, idx) => (
+                    <div key={name} className="border-b border-charcoal-lighter/30 pb-2 last:border-0 last:pb-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-text-muted text-[10px] font-body w-4">{idx + 1}.</span>
+                          <span className="text-text-primary text-xs font-body">{name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-accent text-xs font-body font-medium">
+                            {latest?.score?.toLocaleString() || 0}
+                          </span>
+                          {trend !== 0 && (
+                            <span className={`text-[9px] font-body ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {trend > 0 ? '▲' : '▼'}{Math.abs(trend)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 text-[9px] text-text-muted font-body">
+                        <span>Last: {latest?.weight}lbs × {latest?.reps}r × {latest?.sets}s</span>
+                        <span>Best: {best?.score?.toLocaleString()}</span>
+                      </div>
+                      {/* Mini sparkline */}
+                      {scores.length > 1 && (
+                        <ResponsiveContainer width="100%" height={40}>
+                          <LineChart data={scores} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                            <YAxis hide domain={['dataMin - 100', 'dataMax + 100']} />
+                            <Line
+                              type="monotone"
+                              dataKey="score"
+                              stroke="#FF4F00"
+                              strokeWidth={1.5}
+                              dot={false}
+                              connectNulls
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      )}
+                    </div>
                   ))}
-                </div>
-                {/* Chart */}
-                <ResponsiveContainer width="100%" height={150}>
-                  <LineChart margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3a" />
-                    <XAxis
-                      dataKey="date"
-                      type="category"
-                      allowDuplicatedCategory={false}
-                      stroke="#6b7280"
-                      tick={{ fontSize: 9, fill: '#6b7280' }}
-                      tickFormatter={(v) => v.slice(5)}
-                    />
-                    <YAxis stroke="#9ca3af" tick={{ fontSize: 9, fill: '#9ca3af' }} width={35} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: '#242430',
-                        border: '1px solid #2e2e3a',
-                        borderRadius: '6px',
-                        fontSize: '11px',
-                      }}
-                      labelStyle={{ color: '#9ca3af' }}
-                    />
-                    {Object.entries(historyData).map(([name, entries], idx) => (
-                      <Line
-                        key={name}
-                        data={entries.map((e) => ({ date: e.date, [name]: e.value }))}
-                        dataKey={name}
-                        type="monotone"
-                        stroke={LINE_COLORS[idx % LINE_COLORS.length]}
-                        strokeWidth={1.5}
-                        dot={false}
-                        connectNulls
-                        name={name}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </>
+                <p className="text-[8px] text-text-muted mt-1">Volume Score = weight × reps × sets</p>
+              </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Recent Gym Entries — collapsible */}
+      {/* Recent Gym Entries — grouped by day, collapsible */}
       {recentGymLogs.length > 0 && (
         <div className="mt-6" data-testid="recent-gym-entries">
           <button
@@ -1321,110 +1333,167 @@ export default function GymPage() {
             <span className="text-text-muted text-xs ml-auto">{showRecentEntries ? '▾' : '▸'}</span>
           </button>
           {showRecentEntries && (
-          <div className="panel p-3">
-            <div className="flex flex-col gap-1">
-              {recentGymLogs.map((log) => {
-                const isEditing = editingLogId === log.id
-                const { reps, sets, flag } = parseNotesForEdit(log.notes)
-
-                return (
-                  <div key={log.id} className="border-b border-charcoal-lighter/30 py-2 last:border-0">
-                    {isEditing ? (
-                      /* Edit form */
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-text-primary text-xs font-body w-28 truncate">{log.metric}</span>
-                        <input
-                          type="number"
-                          step="0.5"
-                          value={editForm.weight}
-                          onChange={(e) => setEditForm((f) => ({ ...f, weight: e.target.value }))}
-                          className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs text-text-primary w-16"
-                          placeholder="lbs"
-                        />
-                        <input
-                          type="number"
-                          step="1"
-                          value={editForm.reps}
-                          onChange={(e) => setEditForm((f) => ({ ...f, reps: e.target.value }))}
-                          className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs text-text-primary w-14"
-                          placeholder="reps"
-                        />
-                        <input
-                          type="number"
-                          step="1"
-                          value={editForm.sets}
-                          onChange={(e) => setEditForm((f) => ({ ...f, sets: e.target.value }))}
-                          className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs text-text-primary w-14"
-                          placeholder="sets"
-                        />
-                        <button
-                          onClick={() => setEditForm((f) => ({
-                            ...f,
-                            flag: f.flag === 'none' ? 'failure' : f.flag === 'failure' ? 'dropset' : 'none'
-                          }))}
-                          className={`px-1.5 py-0.5 text-[9px] rounded border ${
-                            editForm.flag === 'failure' ? 'border-red-500 text-red-400'
-                            : editForm.flag === 'dropset' ? 'border-yellow-500 text-yellow-400'
-                            : 'border-charcoal-lighter text-text-muted'
-                          }`}
-                        >
-                          {editForm.flag === 'failure' ? 'Fail' : editForm.flag === 'dropset' ? 'Drop' : '—'}
-                        </button>
-                        <button
-                          onClick={() => handleSaveEdit(log.id)}
-                          className="px-2 py-0.5 text-[10px] bg-charcoal-lighter text-text-primary rounded hover:bg-accent hover:text-white"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => setEditingLogId(null)}
-                          className="text-[10px] text-text-muted hover:text-text-secondary"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      /* Display row */
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                          <span className="text-text-muted text-[10px] font-body w-16 shrink-0">{log.date.slice(5)}</span>
-                          <span className="text-text-primary text-xs font-body truncate">{log.metric}</span>
-                          <span className="text-text-secondary text-[10px] font-body shrink-0">
-                            {log.value}lbs
-                          </span>
-                          <span className="text-text-muted text-[10px] font-body shrink-0">
-                            {reps}r{sets ? ` x ${sets}s` : ''}
-                            {flag !== 'none' && (
-                              <span className={flag === 'failure' ? 'text-red-400 ml-1' : 'text-yellow-400 ml-1'}>
-                                {flag === 'failure' ? '⚠' : '↓'}
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0 ml-2">
-                          <button
-                            onClick={() => handleEditEntry(log)}
-                            className="text-[10px] text-text-muted hover:text-accent transition-colors"
-                            title="Edit"
-                          >
-                            ✎
-                          </button>
-                          <button
-                            onClick={() => handleDeleteEntry(log.id)}
-                            className="text-[10px] text-text-muted hover:text-red-400 transition-colors"
-                            title="Delete"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+          <div className="flex flex-col gap-2">
+            {/* Group by date */}
+            {Object.entries(
+              recentGymLogs.reduce((acc, log) => {
+                if (!acc[log.date]) acc[log.date] = []
+                acc[log.date].push(log)
+                return acc
+              }, {})
+            ).sort(([a], [b]) => b.localeCompare(a)).map(([date, dayLogs]) => (
+              <DayGroup
+                key={date}
+                date={date}
+                logs={dayLogs}
+                editingLogId={editingLogId}
+                editForm={editForm}
+                setEditForm={setEditForm}
+                setEditingLogId={setEditingLogId}
+                handleEditEntry={handleEditEntry}
+                handleSaveEdit={handleSaveEdit}
+                handleDeleteEntry={handleDeleteEntry}
+                parseNotesForEdit={parseNotesForEdit}
+                updateLog={updateLog}
+                loadRecentGymLogs={loadRecentGymLogs}
+              />
+            ))}
           </div>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// DayGroup component for grouped-by-day recent entries
+function DayGroup({ date, logs, editingLogId, editForm, setEditForm, setEditingLogId, handleEditEntry, handleSaveEdit, handleDeleteEntry, parseNotesForEdit, updateLog, loadRecentGymLogs }) {
+  const [expanded, setExpanded] = useState(false)
+
+  async function handleDateChange(logId, newDate) {
+    if (!newDate) return
+    try {
+      await updateLog(logId, { date: newDate })
+      await loadRecentGymLogs()
+    } catch { /* silent */ }
+  }
+
+  return (
+    <div className="panel p-2">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center justify-between w-full text-left py-1"
+      >
+        <span className="text-text-primary text-xs font-body">{date}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-text-muted text-[10px] font-body">{logs.length} exercises</span>
+          <span className="text-text-muted text-[10px]">{expanded ? '▾' : '▸'}</span>
+        </div>
+      </button>
+      {expanded && (
+        <div className="flex flex-col gap-1 mt-1 border-t border-charcoal-lighter/30 pt-1">
+          {logs.map((log) => {
+            const isEditing = editingLogId === log.id
+            const { reps, sets, flag } = parseNotesForEdit(log.notes)
+
+            return (
+              <div key={log.id} className="py-1 border-b border-charcoal-lighter/20 last:border-0">
+                {isEditing ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="date"
+                      value={editForm.date || log.date}
+                      onChange={(e) => setEditForm((f) => ({ ...f, date: e.target.value }))}
+                      className="bg-charcoal border border-charcoal-lighter rounded px-1 py-0.5 text-[10px] text-text-primary w-28"
+                    />
+                    <span className="text-text-primary text-[10px] font-body truncate max-w-[80px]">{log.metric}</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={editForm.weight}
+                      onChange={(e) => setEditForm((f) => ({ ...f, weight: e.target.value }))}
+                      className="bg-charcoal border border-charcoal-lighter rounded px-2 py-0.5 text-[10px] text-text-primary w-14"
+                      placeholder="lbs"
+                    />
+                    <input
+                      type="number"
+                      step="1"
+                      value={editForm.reps}
+                      onChange={(e) => setEditForm((f) => ({ ...f, reps: e.target.value }))}
+                      className="bg-charcoal border border-charcoal-lighter rounded px-2 py-0.5 text-[10px] text-text-primary w-12"
+                      placeholder="reps"
+                    />
+                    <input
+                      type="number"
+                      step="1"
+                      value={editForm.sets}
+                      onChange={(e) => setEditForm((f) => ({ ...f, sets: e.target.value }))}
+                      className="bg-charcoal border border-charcoal-lighter rounded px-2 py-0.5 text-[10px] text-text-primary w-12"
+                      placeholder="sets"
+                    />
+                    <button
+                      onClick={() => setEditForm((f) => ({
+                        ...f,
+                        flag: f.flag === 'none' ? 'failure' : f.flag === 'failure' ? 'dropset' : 'none'
+                      }))}
+                      className={`px-1 py-0.5 text-[8px] rounded border ${
+                        editForm.flag === 'failure' ? 'border-red-500 text-red-400'
+                        : editForm.flag === 'dropset' ? 'border-yellow-500 text-yellow-400'
+                        : 'border-charcoal-lighter text-text-muted'
+                      }`}
+                    >
+                      {editForm.flag === 'failure' ? 'F' : editForm.flag === 'dropset' ? 'D' : '—'}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        // Save edit with possible date change
+                        if (editForm.date && editForm.date !== log.date) {
+                          await handleDateChange(log.id, editForm.date)
+                        }
+                        handleSaveEdit(log.id)
+                      }}
+                      className="px-2 py-0.5 text-[9px] bg-charcoal-lighter text-text-primary rounded hover:bg-accent hover:text-white"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setEditingLogId(null)}
+                      className="text-[9px] text-text-muted"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <span className="text-text-primary text-[10px] font-body truncate">{log.metric}</span>
+                      <span className="text-text-secondary text-[10px] font-body shrink-0">{log.value}lbs</span>
+                      <span className="text-text-muted text-[9px] font-body shrink-0">
+                        {reps}r{sets ? ` × ${sets}s` : ''}
+                        {flag !== 'none' && (
+                          <span className={flag === 'failure' ? 'text-red-400 ml-0.5' : 'text-yellow-400 ml-0.5'}>
+                            {flag === 'failure' ? '⚠' : '↓'}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                      <button
+                        onClick={() => { handleEditEntry(log); setEditForm((f) => ({ ...f, date: log.date })) }}
+                        className="text-[10px] text-text-muted hover:text-accent"
+                        title="Edit"
+                      >✎</button>
+                      <button
+                        onClick={() => handleDeleteEntry(log.id)}
+                        className="text-[10px] text-text-muted hover:text-red-400"
+                        title="Delete"
+                      >✕</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

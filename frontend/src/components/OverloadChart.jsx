@@ -78,6 +78,7 @@ export default function OverloadChart({ exerciseName, data, timeRange, onTimeRan
                 stroke="#FF4F00"
                 tick={{ fontSize: 9, fill: '#FF4F00' }}
                 width={40}
+                domain={['dataMin - 200', 'dataMax + 200']}
                 tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}
               />
               <Tooltip
