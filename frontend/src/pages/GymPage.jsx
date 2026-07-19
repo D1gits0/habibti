@@ -1207,10 +1207,10 @@ export default function GymPage() {
         )}
       </div>
 
-      {/* Volume Score Ranking — by Muscle Group */}
+      {/* Progressive Overload — e1RM charts by Muscle Group */}
       {historyMetrics.length > 0 && (
         <div className="mt-6" data-testid="exercise-history-section">
-          <h2 className="font-body text-text-primary text-xs mb-3">VOLUME SCORE</h2>
+          <h2 className="font-body text-text-primary text-xs mb-3">PROGRESSIVE OVERLOAD</h2>
           <div className="panel p-4">
             {/* Muscle group toggle */}
             <div className="flex flex-wrap gap-1 mb-3">
@@ -1246,7 +1246,7 @@ export default function GymPage() {
               ))}
             </div>
 
-            {/* Volume score ranking per exercise */}
+            {/* e1RM line chart per exercise */}
             {historyLoading ? (
               <div className="h-[100px] flex items-center justify-center text-text-muted text-xs">
                 Loading...
@@ -1256,34 +1256,31 @@ export default function GymPage() {
                 No data for {historySelectedGroup} in this period
               </div>
             ) : (
-              <div className="flex flex-col gap-3">
-                {Object.entries(historyData)
-                  .map(([name, entries]) => {
-                    // Compute latest volume score and best volume score
-                    const scores = entries.map((e) => {
-                      const rMatch = e.notes?.match(/(\d+)r/)
-                      const sMatch = e.notes?.match(/(\d+)s/)
-                      const reps = rMatch ? parseInt(rMatch[1]) : 1
-                      const sets = sMatch ? parseInt(sMatch[1]) : 1
-                      return { date: e.date, score: Math.round(e.value * reps * sets), weight: e.value, reps, sets }
-                    })
-                    const latest = scores[scores.length - 1]
-                    const best = scores.reduce((max, s) => s.score > max.score ? s : max, scores[0])
-                    const prev = scores.length > 1 ? scores[scores.length - 2] : null
-                    const trend = prev ? latest.score - prev.score : 0
-                    return { name, scores, latest, best, trend }
+              <div className="flex flex-col gap-4">
+                {Object.entries(historyData).map(([name, entries], idx) => {
+                  // Compute e1RM per entry using Epley formula: e1RM = weight × (1 + reps/30)
+                  const chartData = entries.map((e) => {
+                    const rMatch = e.notes?.match(/(\d+)r/)
+                    const sMatch = e.notes?.match(/(\d+)s/)
+                    const reps = rMatch ? parseInt(rMatch[1]) : 1
+                    const sets = sMatch ? parseInt(sMatch[1]) : 1
+                    const e1rm = Math.round(e.value * (1 + reps / 30))
+                    const volume = Math.round(e.value * reps * sets)
+                    return { date: e.date, e1rm, volume, weight: e.value, reps, sets }
                   })
-                  .sort((a, b) => (b.latest?.score || 0) - (a.latest?.score || 0))
-                  .map(({ name, scores, latest, best, trend }, idx) => (
-                    <div key={name} className="border-b border-charcoal-lighter/30 pb-2 last:border-0 last:pb-0">
+                  const latest = chartData[chartData.length - 1]
+                  const best = chartData.reduce((max, d) => d.e1rm > max.e1rm ? d : max, chartData[0])
+                  const prev = chartData.length > 1 ? chartData[chartData.length - 2] : null
+                  const trend = prev ? latest.e1rm - prev.e1rm : 0
+
+                  return (
+                    <div key={name} className="border-b border-charcoal-lighter/30 pb-3 last:border-0 last:pb-0">
+                      {/* Exercise header */}
                       <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-text-muted text-[10px] font-body w-4">{idx + 1}.</span>
-                          <span className="text-text-primary text-xs font-body">{name}</span>
-                        </div>
+                        <span className="text-text-primary text-xs font-body">{name}</span>
                         <div className="flex items-center gap-2">
                           <span className="text-accent text-xs font-body font-medium">
-                            {latest?.score?.toLocaleString() || 0}
+                            e1RM: {latest?.e1rm}
                           </span>
                           {trend !== 0 && (
                             <span className={`text-[9px] font-body ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -1292,29 +1289,56 @@ export default function GymPage() {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 text-[9px] text-text-muted font-body">
+                      <div className="flex items-center gap-3 text-[9px] text-text-muted font-body mb-1">
                         <span>Last: {latest?.weight}lbs × {latest?.reps}r × {latest?.sets}s</span>
-                        <span>Best: {best?.score?.toLocaleString()}</span>
+                        <span>Best e1RM: {best?.e1rm}</span>
                       </div>
-                      {/* Mini sparkline */}
-                      {scores.length > 1 && (
-                        <ResponsiveContainer width="100%" height={40}>
-                          <LineChart data={scores} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-                            <YAxis hide domain={['dataMin - 100', 'dataMax + 100']} />
+
+                      {/* e1RM line chart — same style as OverloadChart */}
+                      {chartData.length > 1 && (
+                        <ResponsiveContainer width="100%" height={80}>
+                          <LineChart data={chartData} margin={{ top: 4, right: 5, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3a" />
+                            <XAxis
+                              dataKey="date"
+                              stroke="#6b7280"
+                              tick={{ fontSize: 8, fill: '#6b7280' }}
+                              tickFormatter={(v) => v.slice(5)}
+                            />
+                            <YAxis
+                              stroke="#FF4F00"
+                              tick={{ fontSize: 8, fill: '#FF4F00' }}
+                              width={32}
+                              domain={['dataMin - 10', 'dataMax + 10']}
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                backgroundColor: '#242430',
+                                border: '1px solid #2e2e3a',
+                                borderRadius: '6px',
+                                fontSize: '10px',
+                              }}
+                              formatter={(value, name) => [
+                                name === 'e1rm' ? `${value} lbs` : value.toLocaleString(),
+                                name === 'e1rm' ? 'Est. 1RM' : 'Volume'
+                              ]}
+                            />
                             <Line
                               type="monotone"
-                              dataKey="score"
+                              dataKey="e1rm"
                               stroke="#FF4F00"
-                              strokeWidth={1.5}
-                              dot={false}
+                              strokeWidth={2}
+                              dot={{ fill: '#FF4F00', r: 3 }}
                               connectNulls
+                              name="e1rm"
                             />
                           </LineChart>
                         </ResponsiveContainer>
                       )}
                     </div>
-                  ))}
-                <p className="text-[8px] text-text-muted mt-1">Volume Score = weight × reps × sets</p>
+                  )
+                })}
+                <p className="text-[8px] text-text-muted mt-1">e1RM = weight × (1 + reps/30) — Epley formula</p>
               </div>
             )}
           </div>

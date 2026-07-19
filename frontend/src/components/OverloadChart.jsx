@@ -1,41 +1,34 @@
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts'
 
 const TIME_RANGES = ['1m', '3m', '6m', 'YTD']
 
 /**
  * Parse reps and sets from the notes field.
- * Formats: "8r", "8r x 3s", "failure:true|10r x 3s"
  */
 function parseNotesData(notes) {
-  if (!notes) return { reps: null, sets: 1 }
+  if (!notes) return { reps: 1, sets: 1 }
   const repsMatch = notes.match(/(\d+)r/)
   const setsMatch = notes.match(/(\d+)s/)
   return {
-    reps: repsMatch ? parseInt(repsMatch[1], 10) : null,
+    reps: repsMatch ? parseInt(repsMatch[1], 10) : 1,
     sets: setsMatch ? parseInt(setsMatch[1], 10) : 1,
   }
 }
 
 /**
- * Compute volume score: weight × reps × sets
- * This gives a single number representing total work output per exercise.
+ * Epley formula: e1RM = weight × (1 + reps / 30)
  */
-function computeScore(weight, reps, sets) {
+function computeE1RM(weight, reps) {
   if (!weight || !reps) return null
-  return Math.round(weight * reps * sets)
+  return Math.round(weight * (1 + reps / 30))
 }
 
 export default function OverloadChart({ exerciseName, data, timeRange, onTimeRangeChange, onDotClick, hideTimeRange }) {
   const chartData = (data || []).map((entry) => {
     const { reps, sets } = parseNotesData(entry.notes)
-    const score = computeScore(entry.value, reps, sets)
-    return {
-      date: entry.date,
-      weight: entry.value,
-      reps,
-      sets,
-      score,
-    }
+    const e1rm = computeE1RM(entry.value, reps)
+    const volume = Math.round(entry.value * reps * sets)
+    return { date: entry.date, e1rm, volume, weight: entry.value, reps, sets }
   })
 
   return (
@@ -68,6 +61,7 @@ export default function OverloadChart({ exerciseName, data, timeRange, onTimeRan
         <>
           <ResponsiveContainer width="100%" height={120}>
             <LineChart data={chartData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3a" />
               <XAxis
                 dataKey="date"
                 stroke="#6b7280"
@@ -77,9 +71,8 @@ export default function OverloadChart({ exerciseName, data, timeRange, onTimeRan
               <YAxis
                 stroke="#FF4F00"
                 tick={{ fontSize: 9, fill: '#FF4F00' }}
-                width={40}
-                domain={['dataMin - 200', 'dataMax + 200']}
-                tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}
+                width={35}
+                domain={['dataMin - 10', 'dataMax + 10']}
               />
               <Tooltip
                 contentStyle={{
@@ -90,13 +83,13 @@ export default function OverloadChart({ exerciseName, data, timeRange, onTimeRan
                 }}
                 labelStyle={{ color: '#9ca3af' }}
                 formatter={(value, name) => {
-                  if (name === 'Volume Score') return [value.toLocaleString(), name]
+                  if (name === 'Est. 1RM') return [`${value} lbs`, name]
                   return [value, name]
                 }}
               />
               <Line
                 type="monotone"
-                dataKey="score"
+                dataKey="e1rm"
                 stroke="#FF4F00"
                 strokeWidth={2}
                 dot={{ fill: '#FF4F00', r: 3, cursor: onDotClick ? 'pointer' : 'default' }}
@@ -128,12 +121,12 @@ export default function OverloadChart({ exerciseName, data, timeRange, onTimeRan
                     }
                   },
                 } : { r: 4, fill: '#FF4F00' }}
-                name="Volume Score"
+                name="Est. 1RM"
                 connectNulls
               />
             </LineChart>
           </ResponsiveContainer>
-          <p className="text-[8px] text-text-muted mt-1">Volume = weight × reps × sets</p>
+          <p className="text-[8px] text-text-muted mt-1">e1RM = weight × (1 + reps/30)</p>
         </>
       )}
     </div>
