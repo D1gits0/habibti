@@ -33,8 +33,8 @@ const LINE_COLORS = ['#9ca3af', '#FF4F00', '#60a5fa', '#34d399', '#fbbf24', '#a7
  * Validate a single exercise entry field set.
  * Returns an object with field-specific error messages (empty string = valid).
  */
-function validateExerciseEntry(name, weight, reps) {
-  const errors = { name: '', weight: '', reps: '' }
+function validateExerciseEntry(name, weight, reps, sets) {
+  const errors = { name: '', weight: '', reps: '', sets: '' }
 
   // Name validation
   const trimmedName = (name || '').trim()
@@ -69,6 +69,16 @@ function validateExerciseEntry(name, weight, reps) {
     errors.reps = 'Must be a whole number'
   } else if (repsNum < 1 || repsNum > 100) {
     errors.reps = 'Reps must be 1 to 100'
+  }
+
+  // Sets validation
+  const setsNum = parseInt(sets, 10)
+  if (sets === '' || sets === null || sets === undefined) {
+    errors.sets = 'Sets is required'
+  } else if (isNaN(setsNum) || !Number.isInteger(setsNum)) {
+    errors.sets = 'Must be a whole number'
+  } else if (setsNum < 1 || setsNum > 20) {
+    errors.sets = 'Sets must be 1 to 20'
   }
 
   return errors
@@ -109,7 +119,7 @@ export default function GymPage() {
   // Recent gym entries for edit/delete
   const [recentGymLogs, setRecentGymLogs] = useState([])
   const [editingLogId, setEditingLogId] = useState(null) // log id being edited
-  const [editForm, setEditForm] = useState({ weight: '', reps: '', flag: 'none' })
+  const [editForm, setEditForm] = useState({ weight: '', reps: '', sets: '', flag: 'none' })
   const [showRecentEntries, setShowRecentEntries] = useState(false)
   const [gymStreaks, setGymStreaks] = useState({ current: 0, best: 0 })
 
@@ -137,8 +147,9 @@ export default function GymPage() {
             swap: ex.swap || null,
             weight: '',
             reps: '',
+            sets: '',
             flag: 'none', // 'none' | 'failure' | 'dropset'
-            errors: { name: '', weight: '', reps: '' },
+            errors: { name: '', weight: '', reps: '', sets: '' },
             saved: false,
           }))
         )
@@ -289,33 +300,36 @@ export default function GymPage() {
   }
 
   function parseNotesForEdit(notes) {
-    if (!notes) return { reps: '', flag: 'none' }
+    if (!notes) return { reps: '', sets: '', flag: 'none' }
     let flag = 'none'
-    let repsStr = notes
+    let rest = notes
     if (notes.includes('|')) {
       const [flagPart, repsPart] = notes.split('|', 2)
-      repsStr = repsPart
+      rest = repsPart
       if (flagPart === 'failure:true') flag = 'failure'
       else if (flagPart === 'dropset:true') flag = 'dropset'
     }
-    const match = repsStr.match(/(\d+)r/)
-    return { reps: match ? match[1] : '', flag }
+    const repsMatch = rest.match(/(\d+)r/)
+    const setsMatch = rest.match(/(\d+)s/)
+    return { reps: repsMatch ? repsMatch[1] : '', sets: setsMatch ? setsMatch[1] : '', flag }
   }
 
   function handleEditEntry(log) {
-    const { reps, flag } = parseNotesForEdit(log.notes)
+    const { reps, sets, flag } = parseNotesForEdit(log.notes)
     setEditingLogId(log.id)
-    setEditForm({ weight: String(log.value), reps, flag })
+    setEditForm({ weight: String(log.value), reps, sets, flag })
   }
 
   async function handleSaveEdit(logId) {
     const weightNum = parseFloat(editForm.weight)
     const repsNum = parseInt(editForm.reps, 10)
+    const setsNum = parseInt(editForm.sets, 10)
     if (isNaN(weightNum) || isNaN(repsNum)) return
 
-    let notes = `${repsNum}r`
-    if (editForm.flag === 'failure') notes = `failure:true|${repsNum}r`
-    else if (editForm.flag === 'dropset') notes = `dropset:true|${repsNum}r`
+    const setsStr = !isNaN(setsNum) && setsNum > 0 ? ` x ${setsNum}s` : ''
+    let notes = `${repsNum}r${setsStr}`
+    if (editForm.flag === 'failure') notes = `failure:true|${repsNum}r${setsStr}`
+    else if (editForm.flag === 'dropset') notes = `dropset:true|${repsNum}r${setsStr}`
 
     try {
       await updateLog(logId, { value: weightNum, notes })
@@ -417,8 +431,9 @@ export default function GymPage() {
         swap: null,
         weight: '',
         reps: '',
+        sets: '',
         flag: 'none',
-        errors: { name: '', weight: '', reps: '' },
+        errors: { name: '', weight: '', reps: '', sets: '' },
         saved: false,
       },
     ])
@@ -430,8 +445,8 @@ export default function GymPage() {
 
   async function handleSaveEntry(index) {
     const entry = logEntries[index]
-    const errors = validateExerciseEntry(entry.name, entry.weight, entry.reps)
-    const hasErrors = errors.name || errors.weight || errors.reps
+    const errors = validateExerciseEntry(entry.name, entry.weight, entry.reps, entry.sets)
+    const hasErrors = errors.name || errors.weight || errors.reps || errors.sets
 
     setLogEntries((prev) =>
       prev.map((e, i) => (i === index ? { ...e, errors } : e))
@@ -439,13 +454,14 @@ export default function GymPage() {
 
     if (hasErrors) return
 
-    // Encode notes
+    // Encode notes with sets
     const repsNum = parseInt(entry.reps, 10)
-    let notes = `${repsNum}r`
+    const setsNum = parseInt(entry.sets, 10)
+    let notes = `${repsNum}r x ${setsNum}s`
     if (entry.flag === 'failure') {
-      notes = `failure:true|${repsNum}r`
+      notes = `failure:true|${repsNum}r x ${setsNum}s`
     } else if (entry.flag === 'dropset') {
-      notes = `dropset:true|${repsNum}r`
+      notes = `dropset:true|${repsNum}r x ${setsNum}s`
     }
 
     try {
@@ -815,6 +831,32 @@ export default function GymPage() {
                   {entry.errors.reps && (
                     <span className="text-[10px] text-red-400 mt-0.5" data-testid={`error-reps-${index}`}>
                       {entry.errors.reps}
+                    </span>
+                  )}
+                </div>
+
+                {/* Sets input */}
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      step="1"
+                      min="1"
+                      max="20"
+                      value={entry.sets}
+                      onChange={(e) => handleEntryChange(index, 'sets', e.target.value)}
+                      placeholder="sets"
+                      className={`bg-charcoal border rounded px-2 py-1 text-xs text-text-primary outline-none transition-colors w-14 ${
+                        entry.errors.sets ? 'border-red-500' : 'border-charcoal-lighter focus:border-accent'
+                      }`}
+                      aria-label="Number of sets"
+                      data-testid={`exercise-sets-${index}`}
+                    />
+                    <span className="text-text-muted text-[10px]">sets</span>
+                  </div>
+                  {entry.errors.sets && (
+                    <span className="text-[10px] text-red-400 mt-0.5" data-testid={`error-sets-${index}`}>
+                      {entry.errors.sets}
                     </span>
                   )}
                 </div>
@@ -1283,7 +1325,7 @@ export default function GymPage() {
             <div className="flex flex-col gap-1">
               {recentGymLogs.map((log) => {
                 const isEditing = editingLogId === log.id
-                const { reps, flag } = parseNotesForEdit(log.notes)
+                const { reps, sets, flag } = parseNotesForEdit(log.notes)
 
                 return (
                   <div key={log.id} className="border-b border-charcoal-lighter/30 py-2 last:border-0">
@@ -1306,6 +1348,14 @@ export default function GymPage() {
                           onChange={(e) => setEditForm((f) => ({ ...f, reps: e.target.value }))}
                           className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs text-text-primary w-14"
                           placeholder="reps"
+                        />
+                        <input
+                          type="number"
+                          step="1"
+                          value={editForm.sets}
+                          onChange={(e) => setEditForm((f) => ({ ...f, sets: e.target.value }))}
+                          className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs text-text-primary w-14"
+                          placeholder="sets"
                         />
                         <button
                           onClick={() => setEditForm((f) => ({
@@ -1343,7 +1393,7 @@ export default function GymPage() {
                             {log.value}lbs
                           </span>
                           <span className="text-text-muted text-[10px] font-body shrink-0">
-                            {reps}r
+                            {reps}r{sets ? ` x ${sets}s` : ''}
                             {flag !== 'none' && (
                               <span className={flag === 'failure' ? 'text-red-400 ml-1' : 'text-yellow-400 ml-1'}>
                                 {flag === 'failure' ? '⚠' : '↓'}
