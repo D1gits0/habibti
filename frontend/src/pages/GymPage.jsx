@@ -108,6 +108,12 @@ export default function GymPage() {
   const [showRecentEntries, setShowRecentEntries] = useState(false)
   const [gymStreaks, setGymStreaks] = useState({ current: 0, best: 0 })
 
+  // Cardio state
+  const [showCardio, setShowCardio] = useState(false)
+  const [cardioForm, setCardioForm] = useState({ duration: '', distance: '' })
+  const [cardioSaving, setCardioSaving] = useState(false)
+  const [cardioSaved, setCardioSaved] = useState(false)
+
   useEffect(() => {
     if (!selectedSplit || selectedSplit === 'Rest') return
 
@@ -568,6 +574,28 @@ export default function GymPage() {
         )
       )
     }
+  }
+
+  // Cardio — save run entry
+  async function handleSaveRun() {
+    const duration = parseFloat(cardioForm.duration)
+    const distance = parseFloat(cardioForm.distance)
+    if (isNaN(duration) || duration <= 0) return
+    setCardioSaving(true)
+    const today = new Date().toISOString().split('T')[0]
+    const pace = (duration > 0 && distance > 0) ? (duration / distance).toFixed(2) : null
+    const notes = [
+      `${duration}min`,
+      distance ? `${distance}mi` : null,
+      pace ? `pace:${pace}` : null,
+    ].filter(Boolean).join(' | ')
+    try {
+      await createLog({ date: today, category: 'cardio', metric: 'run', value: distance || duration, notes })
+      setCardioSaved(true)
+      setCardioForm({ duration: '', distance: '' })
+      setTimeout(() => setCardioSaved(false), 3000)
+    } catch { /* silent */ }
+    setCardioSaving(false)
   }
 
   return (
@@ -1067,6 +1095,69 @@ export default function GymPage() {
           )}
         </div>
       )}
+
+      {/* Cardio Section */}
+      <div className="mt-6">
+        <button
+          onClick={() => setShowCardio(!showCardio)}
+          className="flex items-center gap-2 w-full text-left mb-2"
+        >
+          <span className="font-body text-text-primary text-xs">CARDIO</span>
+          <span className="text-text-muted text-xs ml-auto">{showCardio ? '▾' : '▸'}</span>
+        </button>
+        {showCardio && (
+          <div className="panel p-4">
+            {/* Run */}
+            <div className="mb-4">
+              <h3 className="font-body text-text-primary text-[10px] uppercase mb-2">Run</h3>
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="flex flex-col">
+                  <label className="text-[9px] text-text-muted font-body mb-0.5">Duration (min)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={cardioForm.duration}
+                    onChange={(e) => setCardioForm((f) => ({ ...f, duration: e.target.value }))}
+                    placeholder="30"
+                    className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs text-text-primary w-20"
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <label className="text-[9px] text-text-muted font-body mb-0.5">Distance (mi)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={cardioForm.distance}
+                    onChange={(e) => setCardioForm((f) => ({ ...f, distance: e.target.value }))}
+                    placeholder="3.1"
+                    className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs text-text-primary w-20"
+                  />
+                </div>
+                {cardioForm.duration && cardioForm.distance && parseFloat(cardioForm.distance) > 0 && (
+                  <div className="flex flex-col">
+                    <label className="text-[9px] text-text-muted font-body mb-0.5">Pace</label>
+                    <span className="text-xs text-accent font-body">
+                      {(parseFloat(cardioForm.duration) / parseFloat(cardioForm.distance)).toFixed(1)} min/mi
+                    </span>
+                  </div>
+                )}
+                <button
+                  onClick={handleSaveRun}
+                  disabled={cardioSaving}
+                  className="px-3 py-1 text-xs font-body bg-charcoal-lighter text-text-primary rounded hover:bg-accent hover:text-white transition-colors disabled:opacity-50"
+                >
+                  {cardioSaving ? '...' : cardioSaved ? '✓' : 'Log Run'}
+                </button>
+              </div>
+            </div>
+            {/* Swim */}
+            <div>
+              <h3 className="font-body text-text-primary text-[10px] uppercase mb-2">Swim</h3>
+              <p className="text-text-muted text-[10px] font-body">Coming soon</p>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Exercise History — by Muscle Group */}
       {historyMetrics.length > 0 && (

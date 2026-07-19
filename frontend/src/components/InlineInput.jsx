@@ -135,6 +135,15 @@ export default function InlineInput({ date, metric, category, existingValue, pos
         aria-label={`Value for ${metric} on ${date}`}
         data-testid="inline-input-field"
       />
+      {/* Explicit Save button — primary submission method (iOS has no Enter key on numeric keypad) */}
+      <button
+        onClick={handleSubmit}
+        disabled={saving || deleting}
+        className="w-full mt-1 px-2 py-1 text-[10px] font-body bg-charcoal-lighter text-text-primary rounded hover:bg-accent hover:text-white transition-colors disabled:opacity-50"
+        data-testid="inline-input-save-btn"
+      >
+        {saving ? 'Saving...' : 'Save'}
+      </button>
       {error && (
         <p className="text-[10px] text-red-400 mt-1" data-testid="inline-input-error">
           {error}

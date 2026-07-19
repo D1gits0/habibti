@@ -11,6 +11,7 @@ const KNOWN_METRICS = [
   { metric: 'sleep_quality', category: 'sleep', label: 'Sleep Quality' },
   { metric: 'oz_water', category: 'hydration', label: 'Water (oz)' },
   { metric: 'protein_g', category: 'habit', label: 'Protein (g)' },
+  { metric: 'yoga', category: 'habit', label: 'Yoga (1x/week)' },
 ]
 
 const TIME_RANGES = [

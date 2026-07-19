@@ -594,10 +594,16 @@ function SubtaskItem({ item, threadId, allSubtasks, depth, onReload, setError, o
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(item.description)
   const [showDatePicker, setShowDatePicker] = useState(false)
+  const [flashComplete, setFlashComplete] = useState(false)
 
   async function handleToggle() {
     try {
       await updateSubtask(item.id, { done: !item.done })
+      if (!item.done) {
+        // Marking as done — trigger flash
+        setFlashComplete(true)
+        setTimeout(() => setFlashComplete(false), 600)
+      }
       onReload()
     } catch (err) {
       setError(err.message || 'Failed to update subtask')
@@ -641,7 +647,7 @@ function SubtaskItem({ item, threadId, allSubtasks, depth, onReload, setError, o
   return (
     <div>
       <div
-        className={`flex items-center gap-2 py-1 group ${isDragging ? 'opacity-50' : ''}`}
+        className={`flex items-center gap-2 py-1 group ${isDragging ? 'opacity-50' : ''} ${flashComplete ? 'completion-flash' : ''}`}
         draggable
         onDragStart={(e) => onDragStart(e, item.id)}
         onDragOver={onDragOver}
@@ -652,7 +658,7 @@ function SubtaskItem({ item, threadId, allSubtasks, depth, onReload, setError, o
           type="checkbox"
           checked={item.done}
           onChange={handleToggle}
-          className="w-3.5 h-3.5 rounded border-charcoal-lighter accent-text-secondary cursor-pointer"
+          className="w-3.5 h-3.5 rounded border-charcoal-lighter accent-accent cursor-pointer"
           aria-label={`Mark "${item.description}" as ${item.done ? 'undone' : 'done'}`}
         />
         {isEditing ? (

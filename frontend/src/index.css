@@ -26,4 +26,13 @@
   .badge {
     @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-body uppercase tracking-wider;
   }
+  /* Accent flash on task completion */
+  @keyframes completionFlash {
+    0% { background-color: transparent; }
+    20% { background-color: rgba(255, 79, 0, 0.15); }
+    100% { background-color: transparent; }
+  }
+  .completion-flash {
+    animation: completionFlash 0.6s ease-out;
+  }
 }
