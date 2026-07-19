@@ -90,3 +90,10 @@ export const deleteDeadline = (id) =>
 // Calendar
 export const getCalendarEvents = (dateFrom, dateTo) =>
   request(`/calendar/events?date_from=${dateFrom}&date_to=${dateTo}`);
+
+// Push Notifications
+export const getVapidKey = () => request('/push/vapid-key');
+export const subscribePush = (subscription) =>
+  request('/push/subscribe', { method: 'POST', body: JSON.stringify(subscription) });
+export const unsubscribePush = (subscription) =>
+  request('/push/unsubscribe', { method: 'DELETE', body: JSON.stringify(subscription) });

@@ -107,5 +107,16 @@ def init_db():
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_deadlines_project ON deadlines(project_id)
         """)
+
+        # Push subscriptions table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                endpoint TEXT NOT NULL UNIQUE,
+                keys_p256dh TEXT NOT NULL,
+                keys_auth TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
         # Ensure schedule_state single-row exists
         conn.execute("INSERT OR IGNORE INTO schedule_state (id, cycle_start_date) VALUES (1, NULL)")

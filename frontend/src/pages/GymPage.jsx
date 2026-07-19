@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import SwapPicker from '../components/SwapPicker'
 import OverloadChart from '../components/OverloadChart'
 import InlineInput from '../components/InlineInput'
+import { computeStreaks } from '../utils/streaks'
 
 const SPLIT_OPTIONS = ['Push', 'Pull', 'Legs', 'Rest', 'Upper', 'Lower']
 const MAX_EXERCISES_PER_SESSION = 20
@@ -105,6 +106,7 @@ export default function GymPage() {
   const [editingLogId, setEditingLogId] = useState(null) // log id being edited
   const [editForm, setEditForm] = useState({ weight: '', reps: '', flag: 'none' })
   const [showRecentEntries, setShowRecentEntries] = useState(false)
+  const [gymStreaks, setGymStreaks] = useState({ current: 0, best: 0 })
 
   useEffect(() => {
     if (!selectedSplit || selectedSplit === 'Rest') return
@@ -216,6 +218,9 @@ export default function GymPage() {
         const gymLogs = await getLogs({ category: 'gym' })
         const metrics = [...new Set(gymLogs.map((l) => l.metric))].sort()
         setHistoryMetrics(metrics)
+        // Compute gym streak from unique dates
+        const uniqueDates = [...new Set(gymLogs.map((l) => l.date))].sort()
+        setGymStreaks(computeStreaks(uniqueDates))
       } catch {
         setHistoryMetrics([])
       }
@@ -568,6 +573,20 @@ export default function GymPage() {
   return (
     <div className="md:mt-12">
       <h1 className="font-body text-text-primary text-xs md:text-sm mb-4">GYM</h1>
+
+      {/* Gym streak banner */}
+      {(gymStreaks.current > 0 || gymStreaks.best > 0) && (
+        <div className="flex items-center gap-3 mb-4">
+          <span className={`font-body text-xs ${gymStreaks.current > 0 ? 'text-accent' : 'text-text-muted'}`}>
+            🔥 {gymStreaks.current} day streak
+          </span>
+          {gymStreaks.best > 0 && (
+            <span className="font-body text-[10px] text-text-muted">
+              best: {gymStreaks.best}d
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Split Day Type Banner */}
       {selectedSplit && (

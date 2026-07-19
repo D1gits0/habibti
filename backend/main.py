@@ -561,3 +561,44 @@ def get_calendar_events(
             })
 
         return events
+
+
+# ─── PUSH NOTIFICATIONS ──────────────────────────────────────────────────────────
+
+@app.post("/api/push/subscribe", status_code=201)
+def subscribe_push(subscription: dict):
+    """Store a push subscription for notifications."""
+    endpoint = subscription.get("endpoint")
+    keys = subscription.get("keys", {})
+    p256dh = keys.get("p256dh")
+    auth = keys.get("auth")
+
+    if not endpoint or not p256dh or not auth:
+        raise HTTPException(status_code=422, detail="Invalid subscription format")
+
+    with get_db() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO push_subscriptions (endpoint, keys_p256dh, keys_auth) VALUES (?, ?, ?)",
+            (endpoint, p256dh, auth),
+        )
+    return {"status": "subscribed"}
+
+
+@app.delete("/api/push/unsubscribe", status_code=204)
+def unsubscribe_push(subscription: dict):
+    """Remove a push subscription."""
+    endpoint = subscription.get("endpoint")
+    if not endpoint:
+        raise HTTPException(status_code=422, detail="Endpoint required")
+
+    with get_db() as conn:
+        conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+
+
+@app.get("/api/push/vapid-key")
+def get_vapid_key():
+    """Return the VAPID public key for push subscription."""
+    # In production, generate proper VAPID keys and store them
+    # For now, return a placeholder that indicates push is available
+    vapid_key = os.environ.get("VAPID_PUBLIC_KEY", "")
+    return {"publicKey": vapid_key, "configured": bool(vapid_key)}

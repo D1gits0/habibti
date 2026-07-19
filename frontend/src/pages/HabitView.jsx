@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { getLogs, upsertLog, deleteLog } from '../api'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import InlineInput from '../components/InlineInput'
+import { computeStreaks } from '../utils/streaks'
 
 const HABIT_CATEGORIES = ['sleep', 'hydration', 'habit']
 
@@ -216,6 +217,7 @@ export default function HabitView() {
             .map((e) => ({ date: e.date, value: e.value }))
           const { total, pct } = getXpInfo(entries)
           const hasData = chartData.length > 0
+          const streaks = computeStreaks(entries.map((e) => e.date))
 
           return (
             <div key={`${category}-${metric}`} className="panel p-4">
@@ -227,9 +229,15 @@ export default function HabitView() {
                   <span className="text-[10px] text-text-muted ml-2">{category}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="font-body text-[10px] text-text-secondary">
-                    LVL {Math.floor(total / 5)}
+                  {/* Streak display */}
+                  <span className={`font-body text-[10px] ${streaks.current > 0 ? 'text-accent' : 'text-text-muted'}`}>
+                    🔥 {streaks.current}d
                   </span>
+                  {streaks.best > 0 && (
+                    <span className="font-body text-[10px] text-text-muted">
+                      best: {streaks.best}d
+                    </span>
+                  )}
                   {/* Add button — toggles date picker */}
                   <button
                     onClick={() => setDatePickerOpen(datePickerOpen === `${category}|${metric}` ? null : `${category}|${metric}`)}
