@@ -9,6 +9,11 @@ import { computeStreaks } from '../utils/streaks'
 const SPLIT_OPTIONS = ['Push', 'Pull', 'Legs', 'Rest', 'Upper', 'Lower']
 const MAX_EXERCISES_PER_SESSION = 20
 
+function localToday() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 // Muscle group mapping for the exercise history view
 const MUSCLE_GROUPS = {
   Chest: ['Incline DB Press', 'Cable Chest Fly', 'Pec Deck', 'Weighted Dips'],
@@ -275,7 +280,8 @@ export default function GymPage() {
     try {
       const sevenDaysAgo = new Date()
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-      const data = await getLogs({ category: 'gym', date_from: sevenDaysAgo.toISOString().split('T')[0] })
+      const y = sevenDaysAgo.getFullYear(), m = String(sevenDaysAgo.getMonth() + 1).padStart(2, '0'), dd = String(sevenDaysAgo.getDate()).padStart(2, '0')
+      const data = await getLogs({ category: 'gym', date_from: `${y}-${m}-${dd}` })
       setRecentGymLogs(data.sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id))
     } catch {
       setRecentGymLogs([])
@@ -443,7 +449,7 @@ export default function GymPage() {
     }
 
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const today = localToday()
       await createLog({
         date: today,
         category: 'gym',
@@ -554,7 +560,7 @@ export default function GymPage() {
     }
 
     try {
-      const today = new Date().toISOString().split('T')[0]
+      const today = localToday()
       await createLog({
         date: today,
         category: 'gym',
@@ -582,7 +588,7 @@ export default function GymPage() {
     const distance = parseFloat(cardioForm.distance)
     if (isNaN(duration) || duration <= 0) return
     setCardioSaving(true)
-    const today = new Date().toISOString().split('T')[0]
+    const today = localToday()
     const pace = (duration > 0 && distance > 0) ? (duration / distance).toFixed(2) : null
     const notes = [
       `${duration}min`,

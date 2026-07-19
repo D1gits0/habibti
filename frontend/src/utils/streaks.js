@@ -12,7 +12,8 @@ export function computeStreaks(dates) {
   if (!dates || dates.length === 0) return { current: 0, best: 0 }
 
   const uniqueDates = [...new Set(dates)].sort()
-  const today = new Date().toISOString().split('T')[0]
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
   // Compute all streaks
   let best = 1

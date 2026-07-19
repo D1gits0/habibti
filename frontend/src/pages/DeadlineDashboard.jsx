@@ -35,8 +35,8 @@ export default function DeadlineDashboard() {
     try {
       // Fetch a wide range — all deadlines from a year ago to a year ahead
       const now = new Date()
-      const from = new Date(now.getFullYear() - 1, 0, 1).toISOString().split('T')[0]
-      const to = new Date(now.getFullYear() + 1, 11, 31).toISOString().split('T')[0]
+      const from = `${now.getFullYear() - 1}-01-01`
+      const to = `${now.getFullYear() + 1}-12-31`
       const data = await getCalendarEvents(from, to)
       setEvents(data || [])
     } catch {
@@ -45,7 +45,8 @@ export default function DeadlineDashboard() {
     setLoading(false)
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
   // Filter and sort
   const filtered = useMemo(() => {

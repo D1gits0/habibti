@@ -38,7 +38,7 @@ function getWeekDates(refDate) {
   for (let i = 0; i < 7; i++) {
     const dd = new Date(start)
     dd.setDate(start.getDate() + i)
-    dates.push(dd.toISOString().split('T')[0])
+    dates.push(`${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, '0')}-${String(dd.getDate()).padStart(2, '0')}`)
   }
   return dates
 }
@@ -50,7 +50,7 @@ export default function CalendarPage() {
   const [weekStartDate, setWeekStartDate] = useState(() => {
     const d = new Date()
     d.setDate(d.getDate() - d.getDay()) // Sunday of current week
-    return d.toISOString().split('T')[0]
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   })
   const [events, setEvents] = useState([])
   const [projects, setProjects] = useState([])
@@ -107,7 +107,7 @@ export default function CalendarPage() {
     } else if (view === 'Week') {
       const d = new Date(weekStartDate)
       d.setDate(d.getDate() - 7)
-      setWeekStartDate(d.toISOString().split('T')[0])
+      setWeekStartDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
     } else {
       if (month === 1) { setMonth(12); setYear((y) => y - 1) }
       else setMonth((m) => m - 1)
@@ -121,7 +121,7 @@ export default function CalendarPage() {
     } else if (view === 'Week') {
       const d = new Date(weekStartDate)
       d.setDate(d.getDate() + 7)
-      setWeekStartDate(d.toISOString().split('T')[0])
+      setWeekStartDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
     } else {
       if (month === 12) { setMonth(1); setYear((y) => y + 1) }
       else setMonth((m) => m + 1)
@@ -160,7 +160,7 @@ export default function CalendarPage() {
   }
 
   const today = new Date()
-  const todayStr = today.toISOString().split('T')[0]
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
   const monthName = new Date(year, month - 1).toLocaleString('default', { month: 'long' })
 
   // Build month grid cells

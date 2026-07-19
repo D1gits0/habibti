@@ -18,6 +18,6 @@ export function filterByTimeRange(entries, range, now = new Date()) {
     // YTD
     start = new Date(now.getFullYear(), 0, 1)
   }
-  const startStr = start.toISOString().split('T')[0]
+  const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`
   return entries.filter((e) => e.date >= startStr)
 }
