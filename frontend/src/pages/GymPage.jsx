@@ -1246,7 +1246,7 @@ export default function GymPage() {
               ))}
             </div>
 
-            {/* e1RM line chart per exercise */}
+            {/* e1RM charts per exercise — using OverloadChart component */}
             {historyLoading ? (
               <div className="h-[100px] flex items-center justify-center text-text-muted text-xs">
                 Loading...
@@ -1257,88 +1257,48 @@ export default function GymPage() {
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                {Object.entries(historyData).map(([name, entries], idx) => {
-                  // Compute e1RM per entry using Epley formula: e1RM = weight × (1 + reps/30)
-                  const chartData = entries.map((e) => {
-                    const rMatch = e.notes?.match(/(\d+)r/)
-                    const sMatch = e.notes?.match(/(\d+)s/)
-                    const reps = rMatch ? parseInt(rMatch[1]) : 1
-                    const sets = sMatch ? parseInt(sMatch[1]) : 1
+                {Object.entries(historyData).map(([name, entries]) => {
+                  // Compute summary stats for the header
+                  const rMatch = entries[entries.length - 1]?.notes?.match(/(\d+)r/)
+                  const sMatch = entries[entries.length - 1]?.notes?.match(/(\d+)s/)
+                  const lastReps = rMatch ? parseInt(rMatch[1]) : 1
+                  const lastSets = sMatch ? parseInt(sMatch[1]) : 1
+                  const lastWeight = entries[entries.length - 1]?.value || 0
+                  const latestE1rm = Math.round(lastWeight * (1 + lastReps / 30))
+                  const bestE1rm = entries.reduce((max, e) => {
+                    const r = e.notes?.match(/(\d+)r/)
+                    const reps = r ? parseInt(r[1]) : 1
                     const e1rm = Math.round(e.value * (1 + reps / 30))
-                    const volume = Math.round(e.value * reps * sets)
-                    return { date: e.date, e1rm, volume, weight: e.value, reps, sets }
-                  })
-                  const latest = chartData[chartData.length - 1]
-                  const best = chartData.reduce((max, d) => d.e1rm > max.e1rm ? d : max, chartData[0])
-                  const prev = chartData.length > 1 ? chartData[chartData.length - 2] : null
-                  const trend = prev ? latest.e1rm - prev.e1rm : 0
+                    return e1rm > max ? e1rm : max
+                  }, 0)
 
                   return (
                     <div key={name} className="border-b border-charcoal-lighter/30 pb-3 last:border-0 last:pb-0">
-                      {/* Exercise header */}
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-text-primary text-xs font-body">{name}</span>
                         <div className="flex items-center gap-2">
                           <span className="text-accent text-xs font-body font-medium">
-                            e1RM: {latest?.e1rm}
+                            e1RM: {latestE1rm}
                           </span>
-                          {trend !== 0 && (
-                            <span className={`text-[9px] font-body ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                              {trend > 0 ? '▲' : '▼'}{Math.abs(trend)}
-                            </span>
-                          )}
+                          <span className="text-[9px] text-text-muted font-body">
+                            best: {bestE1rm}
+                          </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 text-[9px] text-text-muted font-body mb-1">
-                        <span>Last: {latest?.weight}lbs × {latest?.reps}r × {latest?.sets}s</span>
-                        <span>Best e1RM: {best?.e1rm}</span>
+                      <div className="text-[9px] text-text-muted font-body mb-1">
+                        Last: {lastWeight}lbs × {lastReps}r × {lastSets}s
                       </div>
-
-                      {/* e1RM line chart — same style as OverloadChart */}
-                      {chartData.length > 1 && (
-                        <ResponsiveContainer width="100%" height={80}>
-                          <LineChart data={chartData} margin={{ top: 4, right: 5, left: 0, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#2e2e3a" />
-                            <XAxis
-                              dataKey="date"
-                              stroke="#6b7280"
-                              tick={{ fontSize: 8, fill: '#6b7280' }}
-                              tickFormatter={(v) => v.slice(5)}
-                            />
-                            <YAxis
-                              stroke="#FF4F00"
-                              tick={{ fontSize: 8, fill: '#FF4F00' }}
-                              width={32}
-                              domain={['dataMin - 10', 'dataMax + 10']}
-                            />
-                            <Tooltip
-                              contentStyle={{
-                                backgroundColor: '#242430',
-                                border: '1px solid #2e2e3a',
-                                borderRadius: '6px',
-                                fontSize: '10px',
-                              }}
-                              formatter={(value, name) => [
-                                name === 'e1rm' ? `${value} lbs` : value.toLocaleString(),
-                                name === 'e1rm' ? 'Est. 1RM' : 'Volume'
-                              ]}
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="e1rm"
-                              stroke="#FF4F00"
-                              strokeWidth={2}
-                              dot={{ fill: '#FF4F00', r: 3 }}
-                              connectNulls
-                              name="e1rm"
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      )}
+                      {/* Reuse the exact same OverloadChart component */}
+                      <OverloadChart
+                        exerciseName={name}
+                        data={entries}
+                        timeRange={historyTimeRange}
+                        onTimeRangeChange={(range) => setHistoryTimeRange(range)}
+                        hideTimeRange={true}
+                      />
                     </div>
                   )
                 })}
-                <p className="text-[8px] text-text-muted mt-1">e1RM = weight × (1 + reps/30) — Epley formula</p>
               </div>
             )}
           </div>
