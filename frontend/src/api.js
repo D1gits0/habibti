@@ -97,3 +97,12 @@ export const subscribePush = (subscription) =>
   request('/push/subscribe', { method: 'POST', body: JSON.stringify(subscription) });
 export const unsubscribePush = (subscription) =>
   request('/push/unsubscribe', { method: 'DELETE', body: JSON.stringify(subscription) });
+
+// Day Planner
+export const getDayTasks = (date) => request(`/day-tasks${date ? `?date=${date}` : ''}`);
+export const createDayTask = (data) =>
+  request('/day-tasks', { method: 'POST', body: JSON.stringify(data) });
+export const updateDayTask = (id, data) =>
+  request(`/day-tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export const deleteDayTask = (id) =>
+  request(`/day-tasks/${id}`, { method: 'DELETE' });

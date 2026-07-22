@@ -124,5 +124,20 @@ def init_db():
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
         """)
+
+        # Day planner tasks table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS day_tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL DEFAULT (date('now')),
+                title TEXT NOT NULL,
+                done INTEGER NOT NULL DEFAULT 0,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_day_tasks_date ON day_tasks(date)
+        """)
         # Ensure schedule_state single-row exists
         conn.execute("INSERT OR IGNORE INTO schedule_state (id, cycle_start_date) VALUES (1, NULL)")

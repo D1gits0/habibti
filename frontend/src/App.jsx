@@ -3,13 +3,13 @@ import ProjectsBoard from './pages/ProjectsBoard'
 import GymPage from './pages/GymPage'
 import HabitView from './pages/HabitView'
 import CalendarPage from './pages/CalendarPage'
-import DeadlineDashboard from './pages/DeadlineDashboard'
+import DayPlanner from './pages/DayPlanner'
 import Settings from './pages/Settings'
 
 const navItems = [
   { to: '/', label: 'Projects' },
+  { to: '/planner', label: 'Planner' },
   { to: '/calendar', label: 'Calendar' },
-  { to: '/deadlines', label: 'Deadlines' },
   { to: '/habits', label: 'Habits' },
   { to: '/gym', label: 'Gym' },
   { to: '/settings', label: 'Settings' },
@@ -23,7 +23,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<ProjectsBoard />} />
             <Route path="/calendar" element={<CalendarPage />} />
-            <Route path="/deadlines" element={<DeadlineDashboard />} />
+            <Route path="/planner" element={<DayPlanner />} />
+            <Route path="/deadlines" element={<Navigate to="/calendar" replace />} />
             <Route path="/log" element={<Navigate to="/habits" replace />} />
             <Route path="/gym" element={<GymPage />} />
             <Route path="/habits" element={<HabitView />} />

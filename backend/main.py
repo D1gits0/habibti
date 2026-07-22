@@ -602,3 +602,58 @@ def get_vapid_key():
     # For now, return a placeholder that indicates push is available
     vapid_key = os.environ.get("VAPID_PUBLIC_KEY", "")
     return {"publicKey": vapid_key, "configured": bool(vapid_key)}
+
+
+# ─── DAY PLANNER ─────────────────────────────────────────────────────────────────
+
+@app.get("/api/day-tasks")
+def list_day_tasks(date: str = Query(None)):
+    """List day tasks for a given date (defaults to today)."""
+    with get_db() as conn:
+        target_date = date or datetime.now().strftime("%Y-%m-%d")
+        rows = conn.execute(
+            "SELECT id, date, title, done, sort_order FROM day_tasks WHERE date = ? ORDER BY sort_order ASC, id ASC",
+            (target_date,),
+        ).fetchall()
+        return [{"id": r[0], "date": r[1], "title": r[2], "done": bool(r[3]), "sort_order": r[4]} for r in rows]
+
+
+@app.post("/api/day-tasks", status_code=201)
+def create_day_task(task: dict):
+    """Create a new day task."""
+    title = task.get("title", "").strip()
+    task_date = task.get("date") or datetime.now().strftime("%Y-%m-%d")
+    if not title:
+        raise HTTPException(status_code=422, detail="Title is required")
+    with get_db() as conn:
+        # Get next sort_order
+        max_order = conn.execute(
+            "SELECT COALESCE(MAX(sort_order), -1) FROM day_tasks WHERE date = ?", (task_date,)
+        ).fetchone()[0]
+        cursor = conn.execute(
+            "INSERT INTO day_tasks (date, title, sort_order) VALUES (?, ?, ?)",
+            (task_date, title, max_order + 1),
+        )
+        return {"id": cursor.lastrowid, "date": task_date, "title": title, "done": False, "sort_order": max_order + 1}
+
+
+@app.put("/api/day-tasks/{task_id}")
+def update_day_task(task_id: int, task: dict):
+    """Update a day task (title, done status)."""
+    with get_db() as conn:
+        existing = conn.execute("SELECT id FROM day_tasks WHERE id = ?", (task_id,)).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if "done" in task:
+            conn.execute("UPDATE day_tasks SET done = ? WHERE id = ?", (1 if task["done"] else 0, task_id))
+        if "title" in task and task["title"].strip():
+            conn.execute("UPDATE day_tasks SET title = ? WHERE id = ?", (task["title"].strip(), task_id))
+        row = conn.execute("SELECT id, date, title, done, sort_order FROM day_tasks WHERE id = ?", (task_id,)).fetchone()
+        return {"id": row[0], "date": row[1], "title": row[2], "done": bool(row[3]), "sort_order": row[4]}
+
+
+@app.delete("/api/day-tasks/{task_id}", status_code=204)
+def delete_day_task(task_id: int):
+    """Delete a day task."""
+    with get_db() as conn:
+        conn.execute("DELETE FROM day_tasks WHERE id = ?", (task_id,))

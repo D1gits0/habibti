@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getGymExercises, createLog, getLogs, getGymHistory, upsertLog, updateLog, deleteLog } from '../api'
+import { getGymExercises, createLog, getLogs, getGymHistory, upsertLog, updateLog, deleteLog, getTodaySchedule } from '../api'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import SwapPicker from '../components/SwapPicker'
 import OverloadChart from '../components/OverloadChart'
@@ -125,7 +125,8 @@ export default function GymPage() {
 
   // Cardio state
   const [showCardio, setShowCardio] = useState(false)
-  const [cardioForm, setCardioForm] = useState({ duration: '', distance: '' })
+  const [cardioType, setCardioType] = useState('run')
+  const [cardioForm, setCardioForm] = useState({ duration: '', distance: '', date: '' })
   const [cardioSaving, setCardioSaving] = useState(false)
   const [cardioSaved, setCardioSaved] = useState(false)
 
@@ -240,9 +241,37 @@ export default function GymPage() {
         const gymLogs = await getLogs({ category: 'gym' })
         const metrics = [...new Set(gymLogs.map((l) => l.metric))].sort()
         setHistoryMetrics(metrics)
-        // Compute gym streak from unique dates
+        // Compute gym streak — get rest days from split cycle
         const uniqueDates = [...new Set(gymLogs.map((l) => l.date))].sort()
-        setGymStreaks(computeStreaks(uniqueDates))
+        // Determine rest days: day indices 3 and 5 in the 7-day cycle
+        // We need cycle_start_date from schedule API
+        try {
+          const scheduleInfo = await getTodaySchedule()
+          if (scheduleInfo && scheduleInfo.configured) {
+            // Build rest day set for the date range of logged workouts
+            const restDays = new Set()
+            if (uniqueDates.length > 0) {
+              const startD = new Date(uniqueDates[0])
+              const endD = new Date()
+              for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+                const dayType = scheduleInfo.day_type // We can't easily compute per-day without cycle_start
+                // Simplified: use the 7-day cycle pattern from today's day_index
+                const todayIndex = scheduleInfo.day_index
+                const diff = Math.round((new Date() - d) / (86400000))
+                const idx = ((todayIndex - diff) % 7 + 7) % 7
+                if (['Rest'].includes(['Pull', 'Push', 'Legs', 'Rest', 'Upper', 'Rest', 'Lower'][idx])) {
+                  const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+                  restDays.add(ds)
+                }
+              }
+            }
+            setGymStreaks(computeStreaks(uniqueDates, restDays))
+          } else {
+            setGymStreaks(computeStreaks(uniqueDates))
+          }
+        } catch {
+          setGymStreaks(computeStreaks(uniqueDates))
+        }
       } catch {
         setHistoryMetrics([])
       }
@@ -598,13 +627,13 @@ export default function GymPage() {
     }
   }
 
-  // Cardio — save run entry
-  async function handleSaveRun() {
+  // Cardio — save run/hike entry
+  async function handleSaveCardio() {
     const duration = parseFloat(cardioForm.duration)
     const distance = parseFloat(cardioForm.distance)
     if (isNaN(duration) || duration <= 0) return
     setCardioSaving(true)
-    const today = localToday()
+    const date = cardioForm.date || localToday()
     const pace = (duration > 0 && distance > 0) ? (duration / distance).toFixed(2) : null
     const notes = [
       `${duration}min`,
@@ -612,9 +641,9 @@ export default function GymPage() {
       pace ? `pace:${pace}` : null,
     ].filter(Boolean).join(' | ')
     try {
-      await createLog({ date: today, category: 'cardio', metric: 'run', value: distance || duration, notes })
+      await createLog({ date, category: 'cardio', metric: cardioType, value: distance || duration, notes })
       setCardioSaved(true)
-      setCardioForm({ duration: '', distance: '' })
+      setCardioForm({ duration: '', distance: '', date: '' })
       setTimeout(() => setCardioSaved(false), 3000)
     } catch { /* silent */ }
     setCardioSaving(false)
@@ -1144,7 +1173,7 @@ export default function GymPage() {
         </div>
       )}
 
-      {/* Cardio Section */}
+      {/* Cardio Section — proper dropdown */}
       <div className="mt-6">
         <button
           onClick={() => setShowCardio(!showCardio)}
@@ -1155,10 +1184,37 @@ export default function GymPage() {
         </button>
         {showCardio && (
           <div className="panel p-4">
-            {/* Run */}
-            <div className="mb-4">
-              <h3 className="font-body text-text-primary text-[10px] uppercase mb-2">Run</h3>
+            {/* Category selector */}
+            <div className="flex gap-2 mb-3">
+              {['run', 'hike', 'swim'].map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setCardioType(type)}
+                  className={`px-3 py-1 text-[10px] font-body rounded transition-colors capitalize ${
+                    cardioType === type
+                      ? 'bg-accent text-white'
+                      : 'bg-charcoal-lighter text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+
+            {cardioType === 'swim' ? (
+              <p className="text-text-muted text-[10px] font-body">Coming soon</p>
+            ) : (
               <div className="flex flex-wrap gap-2 items-end">
+                <div className="flex flex-col">
+                  <label className="text-[9px] text-text-muted font-body mb-0.5">Date</label>
+                  <input
+                    type="date"
+                    value={cardioForm.date}
+                    onChange={(e) => setCardioForm((f) => ({ ...f, date: e.target.value }))}
+                    className="bg-charcoal border border-charcoal-lighter rounded px-2 py-1 text-xs text-text-primary w-28"
+                    placeholder={localToday()}
+                  />
+                </div>
                 <div className="flex flex-col">
                   <label className="text-[9px] text-text-muted font-body mb-0.5">Duration (min)</label>
                   <input
@@ -1190,19 +1246,14 @@ export default function GymPage() {
                   </div>
                 )}
                 <button
-                  onClick={handleSaveRun}
+                  onClick={handleSaveCardio}
                   disabled={cardioSaving}
                   className="px-3 py-1 text-xs font-body bg-charcoal-lighter text-text-primary rounded hover:bg-accent hover:text-white transition-colors disabled:opacity-50"
                 >
-                  {cardioSaving ? '...' : cardioSaved ? '✓' : 'Log Run'}
+                  {cardioSaving ? '...' : cardioSaved ? '✓' : `Log ${cardioType}`}
                 </button>
               </div>
-            </div>
-            {/* Swim */}
-            <div>
-              <h3 className="font-body text-text-primary text-[10px] uppercase mb-2">Swim</h3>
-              <p className="text-text-muted text-[10px] font-body">Coming soon</p>
-            </div>
+            )}
           </div>
         )}
       </div>
